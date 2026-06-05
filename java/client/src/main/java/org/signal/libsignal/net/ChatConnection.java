@@ -7,6 +7,7 @@ package org.signal.libsignal.net;
 
 import java.lang.ref.WeakReference;
 import java.net.MalformedURLException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -26,7 +27,7 @@ import org.signal.libsignal.net.internal.BridgeChatListener;
  * registered listener will not receive any events until {@link #start()} is called.
  */
 public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
-  private final TokioAsyncContext tokioAsyncContext;
+  final TokioAsyncContext tokioAsyncContext;
   private final ChatConnectionListener chatListener;
 
   protected ChatConnection(
@@ -64,21 +65,18 @@ public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
       this.chat = new WeakReference<>(chat);
     }
 
-    public void onIncomingMessage(
+    public void receivedIncomingMessage(
         byte[] envelope, long serverDeliveryTimestamp, long sendAckHandle) {
 
+      var ack = new ChatConnectionListener.ServerMessageAck(sendAckHandle);
       ChatConnection chat = this.chat.get();
       if (chat == null) return;
       if (chat.chatListener == null) return;
 
-      chat.chatListener.onIncomingMessage(
-          chat,
-          envelope,
-          serverDeliveryTimestamp,
-          new ChatConnectionListener.ServerMessageAck(chat.tokioAsyncContext, sendAckHandle));
+      chat.chatListener.onIncomingMessage(chat, envelope, serverDeliveryTimestamp, ack);
     }
 
-    public void onQueueEmpty() {
+    public void receivedQueueEmpty() {
       ChatConnection chat = this.chat.get();
       if (chat == null) return;
       if (chat.chatListener == null) return;
@@ -86,7 +84,7 @@ public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
       chat.chatListener.onQueueEmpty(chat);
     }
 
-    public void onReceivedAlerts(String[] alerts) {
+    public void receivedAlerts(String[] alerts) {
       ChatConnection chat = this.chat.get();
       if (chat == null) return;
       if (chat.chatListener == null) return;
@@ -94,7 +92,7 @@ public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
       chat.chatListener.onReceivedAlerts(chat, alerts);
     }
 
-    public void onConnectionInterrupted(Throwable disconnectReason) {
+    public void connectionInterrupted(Throwable disconnectReason) {
       ChatConnection chat = this.chat.get();
       if (chat == null) return;
       if (chat.chatListener == null) return;
@@ -119,19 +117,20 @@ public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
     void setChat(ChatConnection chat) {
       this.chat = new WeakReference<>(chat);
       if (savedAlerts != null) {
-        super.onReceivedAlerts(savedAlerts);
+        super.receivedAlerts(savedAlerts);
         savedAlerts = null;
       }
     }
 
-    public void onReceivedAlerts(String[] alerts) {
+    @Override
+    public void receivedAlerts(String[] alerts) {
       // This callback can happen before setChat, so we might need to replay it later.
       if (this.chat.get() == null) {
         savedAlerts = alerts;
         return;
       }
 
-      super.onReceivedAlerts(alerts);
+      super.receivedAlerts(alerts);
     }
   }
 
@@ -252,6 +251,25 @@ public abstract class ChatConnection extends NativeHandleGuard.SimpleOwner {
                 guardedMap(req -> NativeTesting.TESTING_ChatRequestGetHeaderValue(req, header)));
       }
       return map;
+    }
+
+    /** Must be called with an array-backed ByteBuffer. */
+    public static kotlinx.serialization.json.JsonElement getNextGrpcMessage(
+        String name, ByteBuffer body) {
+      var messageOffsets =
+          NativeTesting.TESTING_FakeChatRemoteEnd_NextGrpcMessage(
+              body.array(), body.arrayOffset() + body.position());
+      var messageBytes = new byte[messageOffsets.getSecond() - messageOffsets.getFirst()];
+      body.position(messageOffsets.getFirst() - body.arrayOffset()).get(messageBytes);
+      var messageJson = NativeTesting.TESTING_FakeChatRemoteEnd_BinprotoToJson(name, messageBytes);
+      return FakeChatRemoteKt.decodeJson(messageJson);
+    }
+
+    public kotlinx.serialization.json.JsonElement getSingleGrpcMessage(String name) {
+      var body = ByteBuffer.wrap(getBody());
+      var result = InternalRequest.getNextGrpcMessage(name, body);
+      assert !body.hasRemaining() : "message had trailing data, use getNextGrpcMessage instead";
+      return result;
     }
   }
 

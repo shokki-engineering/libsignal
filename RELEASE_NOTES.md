@@ -1,5 +1,7 @@
-v0.83.0
+v0.94.4
 
-- backups: Support polls in backup validator
+- Internal: libsignal now uses Android Gradle Plugin 9.1.1
 
-- spqr: Remove client-provided options to turn on/off SPQR, defaulting to on everywhere.
+- zkgroup: Add AvatarUploadCredential, an anonymous credential used to rate-limit avatar uploads.
+
+- Several new requests have been added to UnauthBackupsService; however, they are only usable when an H2 connection is guaranteed, and should not be adopted otherwise.

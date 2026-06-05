@@ -5,7 +5,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
 
 import ServerPublicParams from '../ServerPublicParams.js';
@@ -58,7 +58,7 @@ export default class ClientZkAuthOperations {
   }
 
   createAuthCredentialWithPniPresentationWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     groupSecretParams: GroupSecretParams,
     authCredential: AuthCredentialWithPni
   ): AuthCredentialPresentation {

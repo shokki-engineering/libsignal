@@ -6,7 +6,7 @@
 import * as stream from 'node:stream';
 import { Buffer } from 'node:buffer';
 
-import Native from '../Native.js';
+import * as Native from './Native.js';
 import {
   IncrementalMacVerificationFailed,
   LibSignalErrorBase,
@@ -29,9 +29,9 @@ export function inferChunkSize(dataSize: number): ChunkSizeChoice {
 class DigestingWritable extends stream.Writable {
   _nativeHandle: Native.IncrementalMac;
 
-  _digests: Uint8Array[] = [];
+  _digests: Uint8Array<ArrayBuffer>[] = [];
 
-  constructor(key: Uint8Array, sizeChoice: ChunkSizeChoice) {
+  constructor(key: Uint8Array<ArrayBuffer>, sizeChoice: ChunkSizeChoice) {
     super();
     this._nativeHandle = Native.IncrementalMac_Initialize(
       key,
@@ -39,7 +39,7 @@ class DigestingWritable extends stream.Writable {
     );
   }
 
-  getFinalDigest(): Uint8Array {
+  getFinalDigest(): Uint8Array<ArrayBuffer> {
     // Use Buffer.concat for convenience, but return a proper Uint8Array, both for the correct type
     // and to make an independent copy of a possibly-reused buffer.
     return new Uint8Array(Buffer.concat(this._digests));
@@ -74,7 +74,7 @@ class DigestingWritable extends stream.Writable {
 export class DigestingPassThrough extends stream.Transform {
   private digester: DigestingWritable;
 
-  constructor(key: Uint8Array, sizeChoice: ChunkSizeChoice) {
+  constructor(key: Uint8Array<ArrayBuffer>, sizeChoice: ChunkSizeChoice) {
     super();
     this.digester = new DigestingWritable(key, sizeChoice);
 
@@ -84,12 +84,12 @@ export class DigestingPassThrough extends stream.Transform {
     });
   }
 
-  getFinalDigest(): Uint8Array {
+  getFinalDigest(): Uint8Array<ArrayBuffer> {
     return this.digester.getFinalDigest();
   }
 
   public override _transform(
-    data: Uint8Array,
+    data: Uint8Array<ArrayBuffer>,
     enc: BufferEncoding,
     callback: CallbackType
   ): void {
@@ -119,16 +119,23 @@ class ValidatingWritable extends stream.Writable {
   _validatedBytes = 0;
 
   constructor(
-    key: Uint8Array,
+    key: Uint8Array<ArrayBuffer>,
     sizeChoice: ChunkSizeChoice,
-    digest: Uint8Array
+    digest: Uint8Array<ArrayBuffer>
   ) {
     super();
-    this._nativeHandle = Native.ValidatingMac_Initialize(
+    const handle = Native.ValidatingMac_Initialize(
       key,
       chunkSizeInBytes(sizeChoice),
       digest
     );
+    if (!handle) {
+      // Not sure why eslint isn't treating IncrementalMacVerificationFailed as an Error;
+      // standalone examples are not reproducing.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw makeVerificationError('Invalid configuration data');
+    }
+    this._nativeHandle = handle;
   }
 
   validatedSize(): number {
@@ -170,12 +177,12 @@ class ValidatingWritable extends stream.Writable {
 
 export class ValidatingPassThrough extends stream.Transform {
   private validator: ValidatingWritable;
-  private buffer = new Array<Uint8Array>();
+  private buffer = new Array<Uint8Array<ArrayBuffer>>();
 
   constructor(
-    key: Uint8Array,
+    key: Uint8Array<ArrayBuffer>,
     sizeChoice: ChunkSizeChoice,
-    digest: Uint8Array
+    digest: Uint8Array<ArrayBuffer>
   ) {
     super();
     this.validator = new ValidatingWritable(key, sizeChoice, digest);
@@ -187,7 +194,7 @@ export class ValidatingPassThrough extends stream.Transform {
   }
 
   public override _transform(
-    data: Uint8Array,
+    data: Uint8Array<ArrayBuffer>,
     enc: BufferEncoding,
     callback: CallbackType
   ): void {
@@ -256,10 +263,8 @@ export function chunkSizeInBytes(sizeChoice: ChunkSizeChoice): number {
   switch (sizeChoice.kind) {
     case 'everyN':
       return sizeChoice.n;
-      break;
     case 'chunksOf':
       return Native.IncrementalMac_CalculateChunkSize(sizeChoice.dataSize);
-      break;
   }
 }
 

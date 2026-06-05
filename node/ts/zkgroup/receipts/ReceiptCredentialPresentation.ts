@@ -4,14 +4,14 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import ReceiptSerial from './ReceiptSerial.js';
 
 export default class ReceiptCredentialPresentation extends ByteArray {
   private readonly __type?: never;
   static SIZE = 329;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.ReceiptCredentialPresentation_CheckValidContents);
   }
 

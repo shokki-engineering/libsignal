@@ -5,7 +5,6 @@
 
 use const_str::hex;
 
-use crate::enclave::HandshakeType;
 use crate::svr2::RaftConfig;
 use crate::util::SmallMap;
 
@@ -55,82 +54,26 @@ macro_rules! def_enclaves {
 }
 
 def_enclaves! {
-    ENCLAVE_ID_SVR2_STAGING_PREQUANTUM => ("38e01eff4fe357dc0b0e8ef7a44b4abc5489fbccba3a78780f3872c277f62bf3", common),
-    ENCLAVE_ID_SVR2_PROD_PREQUANTUM => ("9314436a9a144992bb3680770ea5fd7934a7ffd29257844a33763a238903d570", common),
-    ENCLAVE_ID_SVR2_STAGING_2025Q2 => ("2e8cefe6e3f389d8426adb24e9b7fb7adf10902c96f06f7bbcee36277711ed91", common),
-    ENCLAVE_ID_SVR2_PROD_2025Q2 => ("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6", common),
-    ENCLAVE_ID_SVR2_STAGING => ("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036", common),
-    ENCLAVE_ID_SVR2_PROD => ("29cd63c87bea751e3bfd0fbd401279192e2e5c99948b4ee9437eafc4968355fb", common),
-    ENCLAVE_ID_SVRB_STAGING => ("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036", common),
-    ENCLAVE_ID_SVRB_PROD => ("aa906dbc85965d37accb660b65a8c224f037b0e7cfd034532acada3592e5b446", common),
-    ENCLAVE_ID_CDSI_STAGING => ("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05", common),
-    ENCLAVE_ID_CDSI_PROD => ("ee9503070127120074612b6688e593b67e486b1541449f54d71e387484eb40a3", common),
+    ENCLAVE_ID_SVR2_2025Q3_PROD => ("29cd63c87bea751e3bfd0fbd401279192e2e5c99948b4ee9437eafc4968355fb", common),
+    ENCLAVE_ID_SVRB_2025Q3_PROD => ("aa906dbc85965d37accb660b65a8c224f037b0e7cfd034532acada3592e5b446", common),
+    ENCLAVE_ID_SVR2_2026Q1_STAGING => ("97f151f6ed078edbbfd72fa9cae694dcc08353f1f5e8d9ccd79a971b10ffc535", common),
+    ENCLAVE_ID_SVR2_2026Q1_PROD => ("1240acbd4aa26974184844c8a46b1022d3957ac8a76c1fd8f5b1a15141ee0708", common),
+    ENCLAVE_ID_SVRB_2026Q1_STAGING => ("97f151f6ed078edbbfd72fa9cae694dcc08353f1f5e8d9ccd79a971b10ffc535", common),
+    ENCLAVE_ID_SVRB_2026Q1_PROD => ("bee62050df1072e3d9fdf7660bfaf4e4b71f5622db9de8b30fc5f4b9852d8359", common),
+    ENCLAVE_ID_SVR2_2026Q2_STAGING => ("3c699f4975aaa3d172c0aad042f94f031b2b03e10b9c19a45116a01693d83302", common),
+    ENCLAVE_ID_SVR2_2026Q2_PROD => ("ced8217b26228e4b210c985786999d095c4958a94faf37b14acaf25c4cbb02a4", common),
+    ENCLAVE_ID_SVRB_2026Q2_STAGING => ("3c699f4975aaa3d172c0aad042f94f031b2b03e10b9c19a45116a01693d83302", common),
+    ENCLAVE_ID_SVRB_2026Q2_PROD => ("2048e20fcd07d0992c4907e8e04c5a85f1f993d195004c7342675343ca2e524b", common),
+
+    ENCLAVE_ID_CDSI_STAGING => ("6d9b9649fa3a337754a98059c66d48ac77aaca5299d3b27d6ed1e646c7c81c0a", common),
+    ENCLAVE_ID_CDSI_PROD => ("15637fa1e54fe655176d3df1a9f94b87c01ed377acaa570682dc5d72c95ef07b", common),
 }
 
 /// SW advisories known to be mitigated by default. If an MREnclave is provided that
 /// is not contained in `ACCEPTABLE_SW_ADVISORIES`, this will be used
 pub(crate) const DEFAULT_SW_ADVISORIES: &[&str] = &[];
 
-pub(crate) const SVR2_POSTQUANTUM_OVERRIDE: &SmallMap<&'static [u8], HandshakeType, 2> =
-    &SmallMap::new([
-        (
-            ENCLAVE_ID_SVR2_STAGING_PREQUANTUM,
-            HandshakeType::PreQuantum,
-        ),
-        (ENCLAVE_ID_SVR2_PROD_PREQUANTUM, HandshakeType::PreQuantum),
-    ]);
-
-/// Expected raft configuration for a given enclave.
-pub const RAFT_CONFIG_SVR2_STAGING_PREQUANTUM: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 3,
-    max_voting_replicas: 5,
-    super_majority: 0,
-    group_id: 3565209795906488720,
-    db_version: 2,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-
-pub const RAFT_CONFIG_SVR2_PROD_PREQUANTUM: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 4,
-    max_voting_replicas: 7,
-    super_majority: 2,
-    group_id: 13627152585634424319,
-    db_version: 2,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-pub const RAFT_CONFIG_SVR2_STAGING_2025Q2: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 3,
-    max_voting_replicas: 9,
-    super_majority: 0,
-    group_id: 824451999951354968,
-    db_version: 2,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-
-pub const RAFT_CONFIG_SVR2_PROD_2025Q2: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 4,
-    max_voting_replicas: 13,
-    super_majority: 2,
-    group_id: 15536668032883538859,
-    db_version: 2,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-
-pub const RAFT_CONFIG_SVR2_STAGING: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 3,
-    max_voting_replicas: 9,
-    super_majority: 0,
-    group_id: 14164309227572919775,
-    db_version: 2,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-
-pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
+pub const RAFT_CONFIG_SVR2_2025Q3_PROD: &RaftConfig = &RaftConfig {
     min_voting_replicas: 4,
     max_voting_replicas: 13,
     super_majority: 2,
@@ -140,17 +83,7 @@ pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
     simulated: false,
 };
 
-pub const RAFT_CONFIG_SVRB_STAGING: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 3,
-    max_voting_replicas: 9,
-    super_majority: 0,
-    group_id: 5762521016145161874,
-    db_version: 4,
-    attestation_timeout: 604800,
-    simulated: false,
-};
-
-pub const RAFT_CONFIG_SVRB_PROD: &RaftConfig = &RaftConfig {
+pub const RAFT_CONFIG_SVRB_2025Q3_PROD: &RaftConfig = &RaftConfig {
     min_voting_replicas: 4,
     max_voting_replicas: 13,
     super_majority: 2,
@@ -160,23 +93,99 @@ pub const RAFT_CONFIG_SVRB_PROD: &RaftConfig = &RaftConfig {
     simulated: false,
 };
 
+pub const RAFT_CONFIG_SVR2_2026Q1_STAGING: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 3,
+    max_voting_replicas: 9,
+    super_majority: 0,
+    group_id: 2330628069874851020,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVR2_2026Q1_PROD: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 4,
+    max_voting_replicas: 13,
+    super_majority: 2,
+    group_id: 2076725645304009823,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVRB_2026Q1_STAGING: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 3,
+    max_voting_replicas: 9,
+    super_majority: 0,
+    group_id: 1416305463306398324,
+    db_version: 4,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVRB_2026Q1_PROD: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 4,
+    max_voting_replicas: 13,
+    super_majority: 2,
+    group_id: 16652830871035963553,
+    db_version: 4,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVR2_2026Q2_STAGING: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 3,
+    max_voting_replicas: 9,
+    super_majority: 0,
+    group_id: 5138641357881452604,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVR2_2026Q2_PROD: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 4,
+    max_voting_replicas: 13,
+    super_majority: 2,
+    group_id: 11311619198250676136,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVRB_2026Q2_STAGING: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 3,
+    max_voting_replicas: 9,
+    super_majority: 0,
+    group_id: 11614651745041226414,
+    db_version: 4,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVRB_2026Q2_PROD: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 4,
+    max_voting_replicas: 13,
+    super_majority: 2,
+    group_id: 15457520608692442134,
+    db_version: 4,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
 // This is left here primarily to support SVR2 bridging code that does
 // not expose the notion of environment to the clients.
-pub(crate) static EXPECTED_RAFT_CONFIG_SVR2: SmallMap<&'static [u8], &'static RaftConfig, 6> =
+pub(crate) static EXPECTED_RAFT_CONFIG_SVR2: SmallMap<&'static [u8], &'static RaftConfig, 5> =
     SmallMap::new([
+        (ENCLAVE_ID_SVR2_2025Q3_PROD, RAFT_CONFIG_SVR2_2025Q3_PROD),
         (
-            ENCLAVE_ID_SVR2_STAGING_PREQUANTUM,
-            RAFT_CONFIG_SVR2_STAGING_PREQUANTUM,
+            ENCLAVE_ID_SVR2_2026Q1_STAGING,
+            RAFT_CONFIG_SVR2_2026Q1_STAGING,
         ),
+        (ENCLAVE_ID_SVR2_2026Q1_PROD, RAFT_CONFIG_SVR2_2026Q1_PROD),
         (
-            ENCLAVE_ID_SVR2_PROD_PREQUANTUM,
-            RAFT_CONFIG_SVR2_PROD_PREQUANTUM,
+            ENCLAVE_ID_SVR2_2026Q2_STAGING,
+            RAFT_CONFIG_SVR2_2026Q2_STAGING,
         ),
-        (
-            ENCLAVE_ID_SVR2_STAGING_2025Q2,
-            RAFT_CONFIG_SVR2_STAGING_2025Q2,
-        ),
-        (ENCLAVE_ID_SVR2_PROD_2025Q2, RAFT_CONFIG_SVR2_PROD_2025Q2),
-        (ENCLAVE_ID_SVR2_STAGING, RAFT_CONFIG_SVR2_STAGING),
-        (ENCLAVE_ID_SVR2_PROD, RAFT_CONFIG_SVR2_PROD),
+        (ENCLAVE_ID_SVR2_2026Q2_PROD, RAFT_CONFIG_SVR2_2026Q2_PROD),
     ]);

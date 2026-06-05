@@ -4,7 +4,7 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 
 import GenericServerSecretParams from '../GenericServerSecretParams.js';
 import BackupLevel from './BackupLevel.js';
@@ -13,7 +13,7 @@ import BackupCredentialType from './BackupCredentialType.js';
 export default class BackupAuthCredentialPresentation extends ByteArray {
   private readonly __type?: never;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.BackupAuthCredentialPresentation_CheckValidContents);
   }
 
@@ -28,7 +28,7 @@ export default class BackupAuthCredentialPresentation extends ByteArray {
     );
   }
 
-  getBackupId(): Uint8Array {
+  getBackupId(): Uint8Array<ArrayBuffer> {
     return Native.BackupAuthCredentialPresentation_GetBackupId(this.contents);
   }
 

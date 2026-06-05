@@ -3,6 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+// TODO: asn1::ParseError is at least 136 bytes as of 0.23.0
+// Applied at the module level because of the derive macro interference
+#![allow(clippy::result_large_err)]
+
 use std::collections::HashMap;
 
 use asn1::{ObjectIdentifier, SequenceOf, oid};
@@ -103,13 +107,13 @@ impl SgxPckExtension {
         )?;
 
         Ok(SgxPckExtension {
-            _ppid: ppid.unwrap(),
-            tcb: tcb.unwrap(),
-            pceid: pceid.unwrap(),
-            fmspc: fmspc.unwrap(),
-            _sgx_type: sgx_type.unwrap(),
-            _platform_instance_id: platform_instance_id.unwrap(),
-            _configuration: configuration.unwrap(),
+            _ppid: ppid.expect("initialized by parse_extensions"),
+            tcb: tcb.expect("initialized by parse_extensions"),
+            pceid: pceid.expect("initialized by parse_extensions"),
+            fmspc: fmspc.expect("initialized by parse_extensions"),
+            _sgx_type: sgx_type.expect("initialized by parse_extensions"),
+            _platform_instance_id: platform_instance_id.expect("initialized by parse_extensions"),
+            _configuration: configuration.expect("initialized by parse_extensions"),
         })
     }
 }
@@ -294,9 +298,9 @@ impl<'a> TryFrom<SequenceOf<'a, SgxExtension<'a>>> for Tcb {
         parse_extensions(value, oid_to_compsvn)?;
 
         Ok(Self {
-            compsvn: compsvn.map(Option::unwrap),
-            pcesvn: pcesvn.unwrap(),
-            _cpusvn: cpusvn.unwrap(),
+            compsvn: compsvn.map(|v| v.expect("initialized by parse_extensions")),
+            pcesvn: pcesvn.expect("initialized by parse_extensions"),
+            _cpusvn: cpusvn.expect("initialized by parse_extensions"),
         })
     }
 }
@@ -372,9 +376,9 @@ impl<'a> TryFrom<SequenceOf<'a, SgxExtension<'a>>> for Configuration {
         )?;
 
         Ok(Self {
-            dynamic_platform: dynamic_platform.unwrap(),
-            cached_keys: cached_keys.unwrap(),
-            smt_enabled: smt_enabled.unwrap(),
+            dynamic_platform: dynamic_platform.expect("initialized by parse_extensions"),
+            cached_keys: cached_keys.expect("initialized by parse_extensions"),
+            smt_enabled: smt_enabled.expect("initialized by parse_extensions"),
         })
     }
 }

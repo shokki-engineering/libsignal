@@ -6,7 +6,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { RANDOM_LENGTH } from '../internal/Constants.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 
 import ServerPublicParams from '../ServerPublicParams.js';
 import GroupSecretParams from '../groups/GroupSecretParams.js';
@@ -40,7 +40,7 @@ export default class ClientZkProfileOperations {
   }
 
   createProfileKeyCredentialRequestContextWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     userId: Aci,
     profileKey: ProfileKey
   ): ProfileKeyCredentialRequestContext {
@@ -83,7 +83,7 @@ export default class ClientZkProfileOperations {
   }
 
   createExpiringProfileKeyCredentialPresentationWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     groupSecretParams: GroupSecretParams,
     profileKeyCredential: ExpiringProfileKeyCredential
   ): ProfileKeyCredentialPresentation {

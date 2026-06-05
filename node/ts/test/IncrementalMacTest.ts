@@ -132,8 +132,10 @@ describe('Incremental MAC', () => {
     // Use uneven chunk size to trigger buffering
     const CHUNK_SIZE = 13579;
 
-    function toChunkedReadable(buffer: Uint8Array): stream.Readable {
-      const chunked = new Array<Uint8Array>();
+    function toChunkedReadable(
+      buffer: Uint8Array<ArrayBuffer>
+    ): stream.Readable {
+      const chunked = new Array<Uint8Array<ArrayBuffer>>();
       for (let i = 0; i < buffer.byteLength; i += CHUNK_SIZE) {
         chunked.push(buffer.subarray(i, i + CHUNK_SIZE));
       }
@@ -190,6 +192,16 @@ describe('Incremental MAC', () => {
       )) as LibSignalErrorBase;
       assert.equal(error.code, ErrorCode.IncrementalMacVerificationFailed);
       assert.equal(error.message, 'Corrupted input data');
+    });
+
+    it('handles an invalid digest', () => {
+      const badDigest = Buffer.of(1);
+      expect(
+        () =>
+          new ValidatingPassThrough(TEST_KEY, inferChunkSize(1000), badDigest)
+      )
+        .to.throw(LibSignalErrorBase)
+        .with.property('code', ErrorCode.IncrementalMacVerificationFailed);
     });
   });
 });

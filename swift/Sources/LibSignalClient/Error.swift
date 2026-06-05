@@ -58,7 +58,12 @@ public enum SignalError: Error {
     case networkProtocolError(String)
     case cdsiInvalidToken(String)
     case rateLimitedError(retryAfter: TimeInterval, message: String)
-    case rateLimitChallengeError(token: String, options: Set<ChallengeOption>, message: String)
+    case rateLimitChallengeError(
+        token: String,
+        options: Set<ChallengeOption>,
+        retryAfter: TimeInterval?,
+        message: String
+    )
     case svrDataMissing(String)
     case svrRestoreFailed(triesRemaining: UInt32, message: String)
     case svrRotationMachineTooManySteps(String)
@@ -68,8 +73,13 @@ public enum SignalError: Error {
     case deviceDeregistered(String)
     case connectionInvalidated(String)
     case connectedElsewhere(String)
+    case possibleCaptiveNetwork(String)
     case keyTransparencyError(String)
     case keyTransparencyVerificationFailed(String)
+    case requestUnauthorized(String)
+    case mismatchedDevices(entries: [MismatchedDeviceEntry], message: String)
+    case serviceIdNotFound(String)
+    case uploadTooLarge(String)
 
     case unknown(UInt32, String)
 }
@@ -157,11 +167,12 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         }
         throw SignalError.invalidRegistrationId(address: address, message: errStr)
     case SignalErrorCodeInvalidProtocolAddress:
-        var deviceId: UInt32 = 0
-        let name = try invokeFnReturningString {
-            signal_error_get_invalid_protocol_address($0, &deviceId, error)
+        let pair = try invokeFnReturningValueByPointer(.init()) {
+            signal_error_get_invalid_protocol_address($0, error)
         }
-        throw SignalError.invalidProtocolAddress(name: name, deviceId: deviceId, message: errStr)
+        defer { signal_free_string(pair.first) }
+        let name = String(cString: pair.first!)
+        throw SignalError.invalidProtocolAddress(name: name, deviceId: pair.second, message: errStr)
     case SignalErrorCodeInvalidSenderKeySession:
         let distributionId = try invokeFnReturningUuid {
             signal_error_get_uuid($0, error)
@@ -225,16 +236,22 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         }
         throw SignalError.rateLimitedError(retryAfter: TimeInterval(retryAfterSeconds), message: errStr)
     case SignalErrorCodeRateLimitChallenge:
-        var tokenOut: UnsafePointer<Int8>?
-        let options = try invokeFnReturningData {
-            signal_error_get_rate_limit_challenge(&tokenOut, $0, error)
+        let outer_pair = try invokeFnReturningValueByPointer(.init()) {
+            signal_error_get_rate_limit_challenge($0, error)
         }
-        let token = String(cString: tokenOut!)
-        signal_free_string(tokenOut)
+        let pair = outer_pair.first
+        let retryAfterRaw = outer_pair.second
+        defer {
+            signal_free_string(pair.first)
+            signal_free_buffer(pair.second.base, pair.second.length)
+        }
+        let token = String(cString: pair.first)
+        let options = UnsafeBufferPointer(start: pair.second.base, count: pair.second.length)
         throw SignalError.rateLimitChallengeError(
             token: token,
-            options: Set(try options.map { try ChallengeOption(fromNative: $0) }),
-            message: errStr
+            options: Set(try options.lazy.map { try ChallengeOption(fromNative: $0) }),
+            retryAfter: (retryAfterRaw < 0) ? nil : TimeInterval(retryAfterRaw),
+            message: errStr,
         )
     case SignalErrorCodeSvrDataMissing:
         throw SignalError.svrDataMissing(errStr)
@@ -257,6 +274,8 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         throw SignalError.connectionInvalidated(errStr)
     case SignalErrorCodeConnectedElsewhere:
         throw SignalError.connectedElsewhere(errStr)
+    case SignalErrorCodePossibleCaptiveNetwork:
+        throw SignalError.possibleCaptiveNetwork(errStr)
     case SignalErrorCodeBackupValidation:
         let unknownFields = try invokeFnReturningStringArray {
             signal_error_get_unknown_fields($0, error)
@@ -277,11 +296,12 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
     case SignalErrorCodeRegistrationSendVerificationCodeFailed:
         throw RegistrationError.sendVerificationFailed(errStr)
     case SignalErrorCodeRegistrationCodeNotDeliverable:
-        var permanent = false
-        let message = try invokeFnReturningString {
-            signal_error_get_registration_error_not_deliverable($0, &permanent, error)
+        let pair = try invokeFnReturningValueByPointer(.init()) {
+            signal_error_get_registration_error_not_deliverable($0, error)
         }
-        throw RegistrationError.codeNotDeliverable(message: message, permanentFailure: permanent)
+        defer { signal_free_string(pair.first) }
+        let message = String(cString: pair.first!)
+        throw RegistrationError.codeNotDeliverable(message: message, permanentFailure: pair.second)
     case SignalErrorCodeRegistrationSessionUpdateRejected:
         throw RegistrationError.sessionUpdateRejected(errStr)
     case SignalErrorCodeRegistrationCredentialsCouldNotBeParsed:
@@ -312,6 +332,20 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         throw SignalError.keyTransparencyError(errStr)
     case SignalErrorCodeKeyTransparencyVerificationFailed:
         throw SignalError.keyTransparencyVerificationFailed(errStr)
+    case SignalErrorCodeRequestUnauthorized:
+        throw SignalError.requestUnauthorized(errStr)
+    case SignalErrorCodeMismatchedDevices:
+        var entries = SignalOwnedBufferOfFfiMismatchedDevicesError()
+        try checkError(signal_error_get_mismatched_device_errors(&entries, error))
+        defer { signal_free_list_of_mismatched_device_errors(entries) }
+        throw SignalError.mismatchedDevices(
+            entries: UnsafeBufferPointer(start: entries.base, count: entries.length).map { MismatchedDeviceEntry($0) },
+            message: errStr
+        )
+    case SignalErrorCodeServiceIdNotFound:
+        throw SignalError.serviceIdNotFound(errStr)
+    case SignalErrorCodeUploadTooLarge:
+        throw SignalError.uploadTooLarge(errStr)
     default:
         throw SignalError.unknown(errType, errStr)
     }

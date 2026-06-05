@@ -5,21 +5,24 @@
 
 use libsignal_net::chat::Response as ChatResponse;
 
-use crate::api::RequestError;
 use crate::api::registration::{
     CheckSvr2CredentialsError, CreateSessionError, RegisterAccountError, RegistrationLock,
     RequestVerificationCodeError, ResumeSessionError, SubmitVerificationError, UpdateSessionError,
     VerificationCodeNotDeliverable,
 };
-use crate::ws::ResponseError;
+use crate::api::{AllowRateLimitChallenges, RequestError};
+use crate::ws::{CustomError, ResponseError};
+
+// Rate limit challenges are allowed for all registration requests.
+const ALLOW_RATE_LIMIT_CHALLENGES: AllowRateLimitChallenges = AllowRateLimitChallenges::Yes;
 
 impl<D> From<ResponseError> for RequestError<UpdateSessionError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse { status, .. } = value;
             match status.as_u16() {
-                403 => Some(UpdateSessionError::Rejected),
-                _ => None,
+                403 => CustomError::Err(UpdateSessionError::Rejected),
+                _ => CustomError::NoCustomHandling,
             }
         })
     }
@@ -27,19 +30,19 @@ impl<D> From<ResponseError> for RequestError<UpdateSessionError, D> {
 
 impl<D> From<ResponseError> for RequestError<CreateSessionError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|_| None)
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, CustomError::no_custom_handling)
     }
 }
 
 impl<D> From<ResponseError> for RequestError<ResumeSessionError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse { status, .. } = value;
-            Some(match status.as_u16() {
+            CustomError::Err(match status.as_u16() {
                 404 => ResumeSessionError::SessionNotFound,
                 400 => ResumeSessionError::InvalidSessionId,
                 _ => {
-                    return None;
+                    return CustomError::NoCustomHandling;
                 }
             })
         })
@@ -48,26 +51,28 @@ impl<D> From<ResponseError> for RequestError<ResumeSessionError, D> {
 
 impl<D> From<ResponseError> for RequestError<RequestVerificationCodeError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse {
                 status,
                 body,
                 headers,
                 ..
             } = value;
-            Some(match status.as_u16() {
+            CustomError::Err(match status.as_u16() {
                 400 => RequestVerificationCodeError::InvalidSessionId,
                 404 => RequestVerificationCodeError::SessionNotFound,
                 409 => RequestVerificationCodeError::NotReadyForVerification,
                 418 => RequestVerificationCodeError::SendFailed,
                 440 => {
-                    let not_deliverable = body.as_deref().and_then(|body| {
+                    let Some(not_deliverable) = body.as_deref().and_then(|body| {
                         VerificationCodeNotDeliverable::from_response(headers, body)
-                    })?;
+                    }) else {
+                        return CustomError::NoCustomHandling;
+                    };
                     RequestVerificationCodeError::CodeNotDeliverable(not_deliverable)
                 }
                 _ => {
-                    return None;
+                    return CustomError::NoCustomHandling;
                 }
             })
         })
@@ -76,13 +81,13 @@ impl<D> From<ResponseError> for RequestError<RequestVerificationCodeError, D> {
 
 impl<D> From<ResponseError> for RequestError<SubmitVerificationError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse { status, .. } = value;
-            Some(match status.as_u16() {
+            CustomError::Err(match status.as_u16() {
                 400 => SubmitVerificationError::InvalidSessionId,
                 404 => SubmitVerificationError::SessionNotFound,
                 409 => SubmitVerificationError::NotReadyForVerification,
-                _ => return None,
+                _ => return CustomError::NoCustomHandling,
             })
         })
     }
@@ -90,11 +95,11 @@ impl<D> From<ResponseError> for RequestError<SubmitVerificationError, D> {
 
 impl<D> From<ResponseError> for RequestError<CheckSvr2CredentialsError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse { status, .. } = value;
             match status.as_u16() {
-                422 => Some(CheckSvr2CredentialsError::CredentialsCouldNotBeParsed),
-                _ => None,
+                422 => CustomError::Err(CheckSvr2CredentialsError::CredentialsCouldNotBeParsed),
+                _ => CustomError::NoCustomHandling,
             }
         })
     }
@@ -102,23 +107,26 @@ impl<D> From<ResponseError> for RequestError<CheckSvr2CredentialsError, D> {
 
 impl<D> From<ResponseError> for RequestError<RegisterAccountError, D> {
     fn from(value: ResponseError) -> Self {
-        value.into_request_error(|value| {
+        value.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, |value| {
             let ChatResponse {
                 headers,
                 status,
                 body,
                 ..
             } = value;
-            Some(match status.as_u16() {
+            CustomError::Err(match status.as_u16() {
                 403 => RegisterAccountError::RegistrationRecoveryVerificationFailed,
                 409 => RegisterAccountError::DeviceTransferIsPossibleButNotSkipped,
                 423 => {
-                    let registration_lock = body
+                    let Some(registration_lock) = body
                         .as_deref()
-                        .and_then(|body| RegistrationLock::from_response(headers, body))?;
+                        .and_then(|body| RegistrationLock::from_response(headers, body))
+                    else {
+                        return CustomError::NoCustomHandling;
+                    };
                     RegisterAccountError::RegistrationLock(registration_lock)
                 }
-                _ => return None,
+                _ => return CustomError::NoCustomHandling,
             })
         })
     }

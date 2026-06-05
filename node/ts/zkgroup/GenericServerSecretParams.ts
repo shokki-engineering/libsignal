@@ -4,7 +4,7 @@
 //
 
 import { randomBytes } from 'node:crypto';
-import Native from '../../Native.js';
+import * as Native from '../Native.js';
 import ByteArray from './internal/ByteArray.js';
 
 import { RANDOM_LENGTH } from './internal/Constants.js';
@@ -19,13 +19,15 @@ export default class GenericServerSecretParams extends ByteArray {
     return GenericServerSecretParams.generateWithRandom(random);
   }
 
-  static generateWithRandom(random: Uint8Array): GenericServerSecretParams {
+  static generateWithRandom(
+    random: Uint8Array<ArrayBuffer>
+  ): GenericServerSecretParams {
     return new GenericServerSecretParams(
       Native.GenericServerSecretParams_GenerateDeterministic(random)
     );
   }
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.GenericServerSecretParams_CheckValidContents);
   }
 

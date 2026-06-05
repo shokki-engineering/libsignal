@@ -5,8 +5,7 @@
 
 use std::time::SystemTime;
 
-use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
+use base64::prelude::{BASE64_STANDARD, Engine as _};
 use clap::{Parser, ValueEnum};
 use libsignal_cli_utils::args::{parse_aci, parse_hex_bytes};
 use libsignal_core::Aci;
@@ -38,7 +37,7 @@ const ZKGROUP_PARAMS_PROD: &str = "AMhf5ywVwITZMsff/eCyudZx9JDmkkkbV6PInzG4p8x3V
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::builder()
+    env_logger::Builder::new()
         .filter_module(module_path!(), log::LevelFilter::Info)
         .parse_default_env()
         .init();

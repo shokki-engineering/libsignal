@@ -53,6 +53,35 @@ public class FutureTest {
     assertTrue(e.getCause() instanceof org.signal.libsignal.internal.TestingException);
   }
 
+  @Test(timeout = 5000)
+  public void testFutureThrowsInvalidException() throws Exception {
+    Future future = NativeTesting.TESTING_FutureThrowsPoisonErrorType(ioRuntime);
+    ExecutionException e = assertThrows(ExecutionException.class, () -> future.get());
+    assertTrue(e.getCause() instanceof AssertionError);
+    // Check the whole message to make sure it includes both the original error and the failure to
+    // convert it to an exception. (TestingError just makes that feel especially confusing!)
+    assertTrue(
+        e.getCause().getMessage(),
+        e.getCause()
+            .getMessage()
+            .startsWith(
+                "failed to convert error \"TestingError(org.signal.libsignal.internal.GuaranteedNonexistentException)\": "));
+    assertTrue(
+        e.getCause().getMessage(),
+        e.getCause()
+                .getMessage()
+                .contains(
+                    "JNI error failed to resolve Java class 'org/signal/libsignal/internal/GuaranteedNonexistentException'")
+            || e.getCause()
+                .getMessage()
+                .contains(
+                    "Didn't find class \"org.signal.libsignal.internal.GuaranteedNonexistentException\"")
+            || e.getCause()
+                .getMessage()
+                .contains(
+                    "JNI error failed to resolve Java class 'org.signal.libsignal.internal.GuaranteedNonexistentException'"));
+  }
+
   @Test
   public void testFutureFromRustCancel() {
     TokioAsyncContext context = new TokioAsyncContext();

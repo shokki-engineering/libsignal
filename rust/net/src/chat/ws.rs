@@ -19,6 +19,7 @@ use http::uri::PathAndQuery;
 use http::{Method, StatusCode};
 use itertools::Itertools as _;
 use libsignal_net_infra::TransportInfo;
+use libsignal_net_infra::http_client::Http2Client;
 use libsignal_net_infra::route::GetCurrentInterface;
 use libsignal_net_infra::utils::NetworkChangeEvent;
 use libsignal_net_infra::utils::future::SomeOrPending;
@@ -34,14 +35,16 @@ use tokio::time::{Duration, Instant};
 use tokio_stream::wrappers::{ReceiverStream, UnboundedReceiverStream};
 use tungstenite::protocol::frame::coding::CloseCode;
 
-use crate::chat::{ChatMessageType, MessageProto, Request, RequestProto, Response, ResponseProto};
+use crate::chat::{
+    ChatMessageType, GrpcBody, MessageProto, Request, RequestProto, Response, ResponseProto,
+};
 use crate::env::{
     ALERT_HEADER_NAME, CONNECTED_ELSEWHERE_CLOSE_CODE, CONNECTION_INVALIDATED_CLOSE_CODE,
 };
 use crate::infra::ws::TextOrBinary;
 use crate::infra::ws::connection::{MessageEvent, NextEventError, TungsteniteSendError};
 
-/// Chat service avilable via a connected websocket.
+/// Chat service available via a connected websocket.
 ///
 /// This is backed by a [`tokio`] task that handles the actual interaction with
 /// the remote. Outgoing requests can be sent to the task via a [`mpsc::Sender`]
@@ -54,9 +57,12 @@ pub struct Chat {
     /// that [`Chat::state`] reflects the current state.
     ///
     /// This is a [`TokioMutex`] to allow lock guards to be held across await
-    /// points. If it were a regular [`Mutex`] the futures produced by methods
+    /// points. If it were a regular [`std::sync::Mutex`] the futures produced by methods
     /// on `Chat` would not be `Send`.
     state: TokioMutex<TaskState>,
+
+    /// If the connection is running over H2, additional requests can be sent via this client.
+    shared_h2_connection: Option<Http2Client<GrpcBody>>,
 }
 
 /// Instantiation-time configuration for a [`Chat`] instance.
@@ -188,6 +194,7 @@ impl Chat {
         connection_config: ConnectionConfig<
             impl GetCurrentInterface<Representation = IpAddr> + Send + Sync + 'static,
         >,
+        shared_h2_connection: Option<Http2Client<GrpcBody>>,
         network_change_event: NetworkChangeEvent,
         mut listener: EventListener,
     ) -> Self
@@ -219,6 +226,7 @@ impl Chat {
                 },
             ),
             connection_config,
+            shared_h2_connection,
             network_change_event,
             initial_request_id,
             listener,
@@ -241,12 +249,19 @@ impl Chat {
         listener(ListenerEvent::ReceivedAlerts(alerts))
     }
 
+    pub fn shared_h2_connection(&self) -> Option<Http2Client<GrpcBody>> {
+        self.shared_h2_connection.clone()
+    }
+
     /// Sends a request to the server and waits for the response.
     ///
     /// If the request can't be sent or the response isn't received, this
     /// returns an error.
     pub async fn send(&self, request: Request) -> Result<Response, SendError> {
-        let Self { state } = self;
+        let Self {
+            state,
+            shared_h2_connection: _,
+        } = self;
 
         let Request {
             method,
@@ -277,14 +292,14 @@ impl Chat {
     /// receiving requests and responses.
     pub async fn disconnect(&self) {
         let mut guard = self.state.lock().await;
+
         // Take the existing state and leave a cheap-to-construct temporary
         // state there.
         let state = std::mem::replace(
             &mut *guard,
             TaskState::Finished(Ok(FinishReason::LocalDisconnect)),
         );
-
-        let new_state = match state {
+        *guard = match state {
             TaskState::MaybeStillRunning {
                 request_tx,
                 response_tx,
@@ -298,7 +313,6 @@ impl Chat {
             }
             state @ (TaskState::SignaledToEnd(_) | TaskState::Finished(_)) => state,
         };
-        *guard = new_state
     }
 
     /// Returns `true` if the websocket is known to be connected.
@@ -339,6 +353,7 @@ impl Chat {
         connection_config: ConnectionConfig<
             impl GetCurrentInterface<Representation = IpAddr> + Send + Sync + 'static,
         >,
+        shared_h2_connection: Option<Http2Client<GrpcBody>>,
         network_change_event: NetworkChangeEvent,
         initial_request_id: u64,
         listener: EventListener,
@@ -383,18 +398,25 @@ impl Chat {
             tokio_stream::wrappers::WatchStream::from_changes(network_change_event)
                 .chain(futures_util::stream::pending());
 
+        let h2_shutdown_rx = shared_h2_connection.as_ref().map_or_else(
+            || Box::pin(std::future::pending()) as futures_util::future::BoxFuture<'static, ()>,
+            |c| Box::pin(c.wait_for_h2_shutdown()),
+        );
+
         let connection = ConnectionImpl {
             inner: inner_connection,
             requests_in_flight,
             network_change_event,
             config: connection_config,
             outgoing_request_tx: request_tx.downgrade(),
+            h2_shutdown_rx,
         };
 
         let task = tokio_runtime.spawn(spawned_task_body(
             connection,
             listener,
             response_tx.downgrade(),
+            shared_h2_connection.clone(),
         ));
         let state = TaskState::MaybeStillRunning {
             request_tx,
@@ -404,6 +426,7 @@ impl Chat {
 
         Self {
             state: TokioMutex::new(state),
+            shared_h2_connection,
         }
     }
 }
@@ -417,10 +440,10 @@ impl Responder {
     pub fn send_response(self, status: StatusCode) -> Result<(), SendError> {
         let Self { id, tx } = self;
 
-        if let Some(tx) = tx.upgrade() {
-            if let Ok(()) = tx.send(OutgoingResponse { id, status }) {
-                return Ok(());
-            }
+        if let Some(tx) = tx.upgrade()
+            && let Ok(()) = tx.send(OutgoingResponse { id, status })
+        {
+            return Ok(());
         }
 
         Err(SendError::Disconnected(DisconnectedReason::SocketClosed {
@@ -598,6 +621,7 @@ struct ConnectionImpl<I, GCI> {
         futures_util::stream::Pending<()>,
     >,
     outgoing_request_tx: WeakSender<OutgoingRequest>,
+    h2_shutdown_rx: futures_util::future::BoxFuture<'static, ()>,
     config: ConnectionConfig<GCI>,
 }
 
@@ -686,6 +710,7 @@ async fn spawned_task_body<
     connection: ConnectionImpl<I, GCI>,
     listener: EventListener,
     weak_response_tx: mpsc::WeakUnboundedSender<OutgoingResponse>,
+    shared_h2_connection: Option<Http2Client<GrpcBody>>,
 ) -> Result<FinishReason, TaskErrorState> {
     pin_mut!(connection);
     let tokio_rt = tokio::runtime::Handle::current();
@@ -698,6 +723,10 @@ async fn spawned_task_body<
         log::error!("[{log_tag}] chat handler task exited abnormally");
         listener_state.send_event_blocking(ListenerEvent::Finished(Err(FinishError::Unknown)));
     });
+
+    let cancel_h2_connection_on_exit =
+        shared_h2_connection.map(|h2| scopeguard::guard(h2, |h2| h2.disconnect_all()));
+
     let result = loop {
         let (id, incoming_request) = match connection.as_mut().handle_one_event().await {
             Outcome::Continue(None) => continue,
@@ -725,7 +754,8 @@ async fn spawned_task_body<
     let task_result = result.as_ref().map_err(Into::into).copied();
 
     // The loop is finishing. Make sure to tell the listener after disarming the
-    // scope guard.
+    // scope guard and performing other cleanup.
+    drop(cancel_h2_connection_on_exit);
     let mut listener = scopeguard::ScopeGuard::into_inner(listener_state);
     listener
         .send_event(
@@ -830,8 +860,12 @@ async fn wait_for_task_to_finish(state: &mut TaskState) -> &Result<FinishReason,
             response_tx: _,
         } => {
             // The send can only fail if the task has ended since it owns the
-            // other end of the channel.
-            assert!(task.is_finished());
+            // other end of the channel. However, the task might still be exiting.
+            if !task.is_finished() {
+                log::warn!(
+                    "waiting on live websocket task to exit (it should be in the process of shutting down)"
+                );
+            }
             task
         }
         TaskState::SignaledToEnd(task) => {
@@ -840,6 +874,7 @@ async fn wait_for_task_to_finish(state: &mut TaskState) -> &Result<FinishReason,
             // That's not an error, but it means the task is exiting
             // soon. We can wait for that and then use the error status
             // if there is one.
+            log::info!("waiting on live websocket task to exit (it has been signalled to end)");
             task
         }
         TaskState::Finished(finish_state) => return finish_state,
@@ -977,6 +1012,7 @@ impl<I: InnerConnection, GCI: GetCurrentInterface<Representation = IpAddr>> Conn
             network_change_event,
             config,
             outgoing_request_tx,
+            mut h2_shutdown_rx,
         } = self.project();
 
         let mut event_fut = std::pin::pin!(inner.as_mut().handle_next_event());
@@ -1017,6 +1053,11 @@ impl<I: InnerConnection, GCI: GetCurrentInterface<Representation = IpAddr>> Conn
 
             tokio::select! {
                 inner_event = &mut event_fut => break inner_event,
+                () = &mut h2_shutdown_rx => {
+                    // Treat H2 graceful shutdown as a connection failure immediately even if the
+                    // websocket is still open.
+                    break Outcome::Finished(Err(NextEventError::UnexpectedConnectionClose))
+                }
                 interruption = interruption_fut => match Self::handle_interruption(
                     config,
                     requests_in_flight,
@@ -1481,6 +1522,7 @@ impl From<SendError> for super::SendError {
 
 #[cfg(test)]
 mod test {
+    use std::error::Error;
     use std::io::Error as IoError;
     use std::net::Ipv4Addr;
     use std::sync::atomic::AtomicUsize;
@@ -1490,6 +1532,8 @@ mod test {
     use futures::stream::FusedStream as _;
     use futures_util::stream::FuturesUnordered;
     use http::HeaderMap;
+    use libsignal_net_infra::http_client::Http2Connector;
+    use libsignal_net_infra::route::{Connector, HttpRouteFragment, HttpVersion};
     use rand::seq::IndexedRandom;
     use rand::{Rng as _, SeedableRng};
     use test_case::test_case;
@@ -1497,6 +1541,15 @@ mod test {
     use tokio::sync::mpsc::error::TryRecvError;
 
     use super::*;
+
+    impl Responder {
+        pub(crate) fn dummy() -> Self {
+            Self {
+                id: 1,
+                tx: tokio::sync::mpsc::unbounded_channel().0.downgrade(),
+            }
+        }
+    }
 
     mod fake {
         use futures_util::future::Either;
@@ -1534,6 +1587,7 @@ mod test {
             pub initial_request_id: u64,
             pub post_request_interface_check_timeout: Duration,
             pub network_change_event: NetworkChangeEvent,
+            pub h2_connection: Option<Http2Client<GrpcBody>>,
         }
 
         impl Default for FakeConfig {
@@ -1542,6 +1596,7 @@ mod test {
                     initial_request_id: INITIAL_REQUEST_ID,
                     post_request_interface_check_timeout: POST_REQUEST_TIMEOUT,
                     network_change_event: no_network_change_events(),
+                    h2_connection: None,
                 }
             }
         }
@@ -1565,6 +1620,7 @@ mod test {
                 initial_request_id,
                 post_request_interface_check_timeout,
                 network_change_event,
+                h2_connection,
             } = config;
             let (outgoing_events_tx, outgoing_events_rx) = mpsc::unbounded_channel();
             let (incoming_events_tx, incoming_events_rx) = mpsc::unbounded_channel();
@@ -1582,6 +1638,7 @@ mod test {
                     },
                     get_current_interface,
                 },
+                h2_connection,
                 network_change_event,
                 initial_request_id,
                 listener,
@@ -3229,5 +3286,127 @@ mod test {
             other_events,
         )
         .await;
+    }
+
+    #[test_case(futures_util::stream::empty())]
+    #[test_case(stream_of_events_other_than_responses())]
+    #[test_log::test(tokio::test(start_paused = true))]
+    async fn h2_shutdown_results_in_ws_shutdown(other_events: impl Stream<Item = WsEvent>) {
+        // In order to continue using the fake streams used to test the WS event handling elsewhere,
+        // we make a legitimate H2 connection but then don't run anything over it. This is still
+        // sufficient for the WS event handling to track whether the connection has exited.
+
+        let (h2_client_io, h2_server_io) = tokio::io::duplex(1024);
+
+        let h2_server =
+            hyper::server::conn::http2::Builder::new(hyper_util::rt::TokioExecutor::new());
+        let shutdown_helper = hyper_util::server::graceful::GracefulShutdown::new();
+        let server_task = tokio::spawn(shutdown_helper.watch(h2_server.serve_connection(
+            hyper_util::rt::TokioIo::new(h2_server_io),
+            hyper::service::service_fn(|_| {
+                std::future::pending::<hyper::Result<http::Response<String>>>()
+            }),
+        )));
+
+        let h2_connection = Http2Connector::new()
+            .connect_over(
+                h2_client_io,
+                HttpRouteFragment {
+                    host_header: "fake.signal.org".into(),
+                    path_prefix: "".into(),
+                    http_version: Some(HttpVersion::Http2),
+                    front_name: None,
+                },
+                "h2",
+            )
+            .await
+            .expect("can connect");
+
+        let (listener_tx, listener_rx) = mpsc::unbounded_channel();
+        let (chat, (mut chat_events, inner_responses)) = fake::new_chat_with_config(
+            fake::FakeConfig {
+                h2_connection: Some(h2_connection.clone()),
+                ..Default::default()
+            },
+            |_| std::future::ready(Ipv4Addr::LOCALHOST.into()),
+            Box::new(move |evt| {
+                let _ = listener_tx.send(evt);
+            }),
+        );
+
+        // Send a request and receive a response just to demonstrate that things are working.
+        // Note that the WS is not connected over the H2 channel.
+
+        let request = Request {
+            method: Method::GET,
+            path: PathAndQuery::from_static("/request"),
+            headers: HeaderMap::default(),
+            body: None,
+        };
+        let mut send_request = std::pin::pin!(chat.send(request));
+
+        let receive_outbound_request = async {
+            let fake::OutgoingMessage(_message, meta) =
+                chat_events.recv().await.expect("not ended");
+            let request_id = assert_matches!(&meta, OutgoingMeta::SentRequest(id, _) => *id);
+            inner_responses
+                .send(Outcome::Continue(MessageEvent::SentMessage(meta)).into())
+                .expect("not closed");
+            request_id
+        };
+
+        // Start polling the client sending future and the server receive end.
+        // The client sends won't finish until the response to the request is
+        // received, so do't use `join!`. The server receive will complete,
+        // though.
+        let sent_request_id = select! {
+            biased;
+            response = &mut send_request => unreachable!("send finished before responses were sent: {response:?}"),
+            req = receive_outbound_request => req,
+        };
+
+        let response = ResponseProto {
+            id: Some(sent_request_id.0),
+            status: Some(200),
+            message: None,
+            headers: vec!["resp-header: value".to_string()],
+            body: None,
+        };
+
+        inner_responses
+            .send(
+                Outcome::Continue(MessageEvent::ReceivedMessage(TextOrBinary::Binary(
+                    MessageProto::from(ChatMessageProto::Response(response))
+                        .encode_to_vec()
+                        .into(),
+                )))
+                .into(),
+            )
+            .expect("can send response");
+
+        let _response = send_request.await.expect("request succeeded");
+
+        // Now we disconnect the H2 channel.
+
+        shutdown_helper.shutdown().await;
+        expect_connection_closed(
+            Duration::ZERO,
+            listener_rx,
+            (chat_events, inner_responses),
+            other_events,
+        )
+        .await;
+
+        // The specific error for an unclean exit doesn't matter too much, and in fact hyper says
+        // it's not guaranteed, but it's still worth noticing when it changes.
+        let server_side_error = server_task
+            .await
+            .expect("no panics")
+            .expect_err("H2 disconnected abruptly");
+        let underlying_io_error = server_side_error
+            .source()
+            .and_then(|s| s.downcast_ref::<std::io::Error>())
+            .expect("underlying error is an IO error");
+        assert_eq!(underlying_io_error.kind(), std::io::ErrorKind::BrokenPipe);
     }
 }

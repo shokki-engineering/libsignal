@@ -8,7 +8,8 @@ use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use libsignal_bridge_macros::*;
 use libsignal_bridge_types::net::TokioAsyncContext;
 use libsignal_bridge_types::net::chat::{
-    AuthenticatedChatConnection, ChatListener, HttpRequest, UnauthenticatedChatConnection,
+    AuthenticatedChatConnection, ChatListener, HttpRequest, ProvisioningChatConnection,
+    ProvisioningListener, UnauthenticatedChatConnection,
 };
 use libsignal_net::chat::fake::FakeChatRemote;
 use libsignal_net::chat::{
@@ -31,20 +32,12 @@ pub struct FakeChatServer {
 
 pub struct FakeChatRemoteEnd(FakeChatRemote);
 
-pub struct FakeChatSentRequest {
-    // Hold as an Option so that the value can be taken.
-    http: Option<HttpRequest>,
-    id: u64,
-}
-
 pub struct FakeChatResponse(ResponseProto);
 
 bridge_as_handle!(FakeChatConnection);
 bridge_handle_fns!(FakeChatConnection, clone = false);
 bridge_as_handle!(FakeChatRemoteEnd);
 bridge_handle_fns!(FakeChatRemoteEnd, clone = false);
-bridge_as_handle!(FakeChatSentRequest, mut = true);
-bridge_handle_fns!(FakeChatSentRequest, clone = false);
 bridge_as_handle!(FakeChatServer);
 bridge_handle_fns!(FakeChatServer, clone = false);
 bridge_as_handle!(FakeChatResponse);
@@ -80,14 +73,36 @@ async fn TESTING_FakeChatServer_GetNextRemote(server: &FakeChatServer) -> FakeCh
 fn TESTING_FakeChatConnection_Create(
     tokio: &TokioAsyncContext,
     listener: Box<dyn ChatListener>,
+    grpc_overrides_joined_by_newlines: String,
     alerts_joined_by_newlines: String,
 ) -> FakeChatConnection {
     // "".split_terminator(...) produces [], while normal split() produces [""].
+    // Leaking is unfortunate, but more expedient than mapping to remote config keys or similar.
+    let grpc_overrides = String::leak(grpc_overrides_joined_by_newlines).split_terminator('\n');
     let alerts = alerts_joined_by_newlines.split_terminator('\n');
+
     let (chat, remote) = libsignal_bridge_types::net::chat::FakeChatConnection::new(
         tokio.handle(),
-        listener,
+        listener.into_event_listener(),
+        grpc_overrides,
         alerts,
+    );
+    FakeChatConnection {
+        chat: Some(chat).into(),
+        remote_end: Some(remote).into(),
+    }
+}
+
+#[bridge_fn]
+fn TESTING_FakeChatConnection_CreateProvisioning(
+    tokio: &TokioAsyncContext,
+    listener: Box<dyn ProvisioningListener>,
+) -> FakeChatConnection {
+    let (chat, remote) = libsignal_bridge_types::net::chat::FakeChatConnection::new(
+        tokio.handle(),
+        listener.into_event_listener(),
+        [],
+        [],
     );
     FakeChatConnection {
         chat: Some(chat).into(),
@@ -109,6 +124,14 @@ fn TESTING_FakeChatConnection_TakeUnauthenticatedChat(
 ) -> UnauthenticatedChatConnection {
     let chat = chat.chat.lock().expect("not poisoned").take();
     chat.expect("can't take chat twice").into_unauthenticated()
+}
+
+#[bridge_fn]
+fn TESTING_FakeChatConnection_TakeProvisioningChat(
+    chat: &FakeChatConnection,
+) -> ProvisioningChatConnection {
+    let chat = chat.chat.lock().expect("not poisoned").take();
+    chat.expect("can't take chat twice").into_provisioning()
 }
 
 #[bridge_fn]
@@ -142,6 +165,37 @@ fn TESTING_FakeChatRemoteEnd_SendServerResponse(
         .expect("chat task finished")
 }
 
+#[bridge_io(TokioAsyncContext)]
+async fn TESTING_FakeChatRemoteEnd_SendServerGrpcResponse(
+    chat: &FakeChatRemoteEnd,
+    response: &FakeChatResponse,
+) {
+    let FakeChatResponse(ResponseProto {
+        id,
+        status,
+        message,
+        headers,
+        body,
+    }) = response;
+
+    assert!(
+        message.as_deref().unwrap_or_default().is_empty(),
+        "messages not supported for gRPC"
+    );
+    assert!(headers.is_empty(), "headers not yet implemented for gRPC");
+
+    let http_response = http::Response::builder()
+        .status(u16::try_from(status.unwrap_or_default()).unwrap_or(u16::MAX))
+        .body(body.as_ref().cloned().unwrap_or_default())
+        .expect("valid");
+
+    chat.0
+        .grpc()
+        .await
+        .send_response(id.unwrap_or_default(), http_response)
+        .expect("chat task finished");
+}
+
 #[bridge_fn]
 fn TESTING_FakeChatRemoteEnd_InjectConnectionInterrupted(chat: &FakeChatRemoteEnd) {
     chat.0
@@ -152,7 +206,7 @@ fn TESTING_FakeChatRemoteEnd_InjectConnectionInterrupted(chat: &FakeChatRemoteEn
 #[bridge_io(TokioAsyncContext)]
 async fn TESTING_FakeChatRemoteEnd_ReceiveIncomingRequest(
     chat: &FakeChatRemoteEnd,
-) -> Option<FakeChatSentRequest> {
+) -> Option<(HttpRequest, u64)> {
     let request = chat
         .0
         .receive_request()
@@ -183,20 +237,41 @@ async fn TESTING_FakeChatRemoteEnd_ReceiveIncomingRequest(
             .into(),
     };
 
-    Some(FakeChatSentRequest {
-        http: Some(http_request),
-        id: id.unwrap(),
-    })
+    Some((http_request, id.unwrap()))
 }
 
-#[bridge_fn]
-fn TESTING_FakeChatSentRequest_TakeHttpRequest(request: &mut FakeChatSentRequest) -> HttpRequest {
-    request.http.take().expect("not taken yet")
-}
+#[bridge_io(TokioAsyncContext)]
+async fn TESTING_FakeChatRemoteEnd_ReceiveIncomingGrpcRequest(
+    chat: &FakeChatRemoteEnd,
+) -> Option<(HttpRequest, u64)> {
+    let (id, request) = chat
+        .0
+        .grpc()
+        .await
+        .receive_request()
+        .await
+        .expect("message was invalid")?;
+    let (
+        http::request::Parts {
+            method,
+            uri,
+            headers,
+            ..
+        },
+        body,
+    ) = request.into_parts();
 
-#[bridge_fn]
-fn TESTING_FakeChatSentRequest_RequestId(request: &FakeChatSentRequest) -> u64 {
-    request.id
+    let http_request = HttpRequest {
+        method,
+        path: uri
+            .into_parts()
+            .path_and_query
+            .unwrap_or(http::uri::PathAndQuery::from_static("")),
+        body: Some(body),
+        headers: headers.into(),
+    };
+
+    Some((http_request, id))
 }
 
 #[bridge_fn]
@@ -275,6 +350,52 @@ fn TESTING_FakeChatResponse_Create(
     })
 }
 
+#[bridge_fn]
+fn TESTING_FakeChatRemoteEnd_NextGrpcMessage(input: &[u8], offset: u32) -> (u32, u32) {
+    // Taking an offset avoids extra copies in the streaming input case.
+    let input = &input[offset.try_into().expect("valid offset for buffer")..];
+    let message_slice = libsignal_net_grpc::expect_next_grpc_message_for_testing(input);
+    // We return a (start, end) pair for the app language to slice.
+    // Unfortunately, getting that back out takes a bit of work.
+    let message_offset = if let Some(first_elem) = message_slice.first() {
+        // TODO: replace with slice::element_offset at MSRV 1.94.
+        let first_elem = std::ptr::from_ref(first_elem);
+        let slice_range = input.as_ptr_range();
+        assert!(
+            slice_range.contains(&first_elem),
+            "result should be a subslice"
+        );
+        // Note: subtracting raw addresses only works because the elements are bytes.
+        first_elem.addr() - slice_range.start.addr()
+    } else {
+        // If the message is empty, the header must have been the entire rest of the input.
+        input.len()
+    };
+    let full_offset = offset + u32::try_from(message_offset).expect("input will never be >1GB");
+    (
+        full_offset,
+        full_offset + u32::try_from(message_slice.len()).expect("input will never be >1GB"),
+    )
+}
+
+#[bridge_fn]
+fn TESTING_FakeChatRemoteEnd_GrpcFrameForMessageLength(len: u32) -> Vec<u8> {
+    let mut result = Vec::with_capacity(5);
+    result.push(0);
+    result.extend_from_slice(&len.to_be_bytes());
+    result
+}
+
+#[bridge_fn]
+fn TESTING_FakeChatRemoteEnd_BinprotoToJson(name: String, input: &[u8]) -> String {
+    libsignal_net_grpc::json::expect_binproto_to_json_by_name(&name, input)
+}
+
+#[bridge_fn]
+fn TESTING_FakeChatRemoteEnd_JsonToBinproto(name: String, input: String) -> Vec<u8> {
+    libsignal_net_grpc::json::expect_json_to_binproto_by_name(&name, &input)
+}
+
 make_error_testing_enum! {
     enum TestingChatConnectError for ConnectError {
         WebSocket => WebSocketConnectionFailed,
@@ -284,6 +405,8 @@ make_error_testing_enum! {
         AllAttemptsFailed => AllAttemptsFailed,
         InvalidConnectionConfiguration => InvalidConnectionConfiguration,
         RetryLater => RetryAfter42Seconds,
+        ;
+        PossibleCaptiveNetwork,
     }
 }
 
@@ -308,6 +431,16 @@ fn TESTING_ChatConnectErrorConvert(
         TestingChatConnectError::RetryAfter42Seconds => ConnectError::RetryLater(RetryLater {
             retry_after_seconds: 42,
         }),
+        TestingChatConnectError::PossibleCaptiveNetwork => {
+            ConnectError::WebSocket(libsignal_net::infra::ws::WebSocketConnectError::Transport(
+                libsignal_net::infra::errors::TransportConnectError::SslFailedHandshake(
+                    libsignal_net::infra::errors::FailedHandshakeReason::Cert {
+                        error: boring_signal::x509::X509VerifyError::SELF_SIGNED_CERT_IN_CHAIN,
+                        cert_hashes: vec![],
+                    },
+                ),
+            ))
+        }
     })
 }
 

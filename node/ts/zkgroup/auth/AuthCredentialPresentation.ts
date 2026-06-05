@@ -4,13 +4,13 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import UuidCiphertext from '../groups/UuidCiphertext.js';
 
 export default class AuthCredentialPresentation extends ByteArray {
   private readonly __type?: never;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.AuthCredentialPresentation_CheckValidContents);
   }
 

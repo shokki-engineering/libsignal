@@ -343,6 +343,8 @@ public class Net {
     ///   response indicates the request should be tried again after some time.
     /// - Throws: ``SignalError/deviceDeregistered(_:)`` if the server response
     ///   indicates the device is no longer registered.
+    /// - Throws: ``SignalError/possibleCaptiveNetwork(_:)`` if the server's TLS response
+    ///   suggests a captive network.
     /// - Throws: Other ``SignalError``s for other kinds of failures.
     ///
     /// - Returns:
@@ -381,6 +383,8 @@ public class Net {
     ///   the server).
     /// - Throws: ``SignalError/rateLimitedError(retryAfter:message:)` if the server
     ///   response indicates the request should be tried again after some time.
+    /// - Throws: ``SignalError/possibleCaptiveNetwork(_:)`` if the server's TLS response
+    ///   suggests a captive network.
     /// - Throws: Other ``SignalError``s for other kinds of failures.
     ///
     /// - Returns:
@@ -394,6 +398,29 @@ public class Net {
         )
     }
 
+    /// Asynchronously establishes a provisioning connection to the remote
+    /// chat service.
+    ///
+    /// Creates a connection to the remote chat service, or throws a
+    /// ``SignalError`` if one cannot be established, or if the connection
+    /// attempt is rejected. Once the connection is established, the returned
+    /// object can be used to receive messages after
+    /// ``ProvisioningConnection/start(listener:)`` is called.
+    ///
+    /// - Throws: ``SignalError/appExpired(_:)`` if the current app version is too old (as judged by
+    ///   the server).
+    /// - Throws: ``SignalError/rateLimitedError(retryAfter:message:)` if the server
+    ///   response indicates the request should be tried again after some time.
+    /// - Throws: Other ``SignalError``s for other kinds of failures.
+    ///
+    /// - Returns:
+    ///   An object representing the established, but not active, connection.
+    public func connectProvisioning() async throws -> ProvisioningConnection {
+        return try await ProvisioningConnection(
+            tokioAsyncContext: self.asyncContext,
+            connectionManager: self.connectionManager,
+        )
+    }
     internal var asyncContext: TokioAsyncContext
     internal var connectionManager: ConnectionManager
     internal let environment: Environment
@@ -441,11 +468,12 @@ internal class ConnectionManager: NativeHandleOwner<SignalMutPointerConnectionMa
         remoteConfig: [String: String],
         buildVariant: Net.BuildVariant
     ) {
-        var handle = SignalMutPointerConnectionManager()
-        remoteConfig.withBridgedStringMap { remoteConfig in
-            failOnError(
-                signal_connection_manager_new(&handle, env.rawValue, userAgent, remoteConfig, buildVariant.rawValue)
-            )
+        let handle = remoteConfig.withBridgedStringMap { remoteConfig in
+            failOnError {
+                try invokeFnReturningValueByPointer(.init()) {
+                    signal_connection_manager_new($0, env.rawValue, userAgent, remoteConfig, buildVariant.rawValue)
+                }
+            }
         }
         self.init(owned: NonNull(handle)!)
     }

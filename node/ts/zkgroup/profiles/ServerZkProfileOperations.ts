@@ -4,7 +4,7 @@
 //
 
 import { randomBytes } from 'node:crypto';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
 
 import ServerSecretParams from '../ServerSecretParams.js';
@@ -41,7 +41,7 @@ export default class ServerZkProfileOperations {
   }
 
   issueExpiringProfileKeyCredentialWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     profileKeyCredentialRequest: ProfileKeyCredentialRequest,
     userId: Aci,
     profileKeyCommitment: ProfileKeyCommitment,

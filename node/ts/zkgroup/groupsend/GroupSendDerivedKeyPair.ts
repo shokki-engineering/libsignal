@@ -4,7 +4,7 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import ServerSecretParams from '../ServerSecretParams.js';
 
 // For docs
@@ -22,7 +22,7 @@ import type GroupSendEndorsementsResponse from './GroupSendEndorsementsResponse.
  * @see {@link GroupSendFullToken#verify}
  */
 export default class GroupSendDerivedKeyPair extends ByteArray {
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.GroupSendDerivedKeyPair_CheckValidContents);
   }
 

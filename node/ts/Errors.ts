@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import { ProtocolAddress } from './Address.js';
-import Native from '../Native.js';
+import { ProtocolAddress, ServiceId } from './Address.js';
+import * as Native from './Native.js';
 
 export enum ErrorCode {
   Generic,
@@ -56,6 +56,7 @@ export enum ErrorCode {
   DeviceDelinked,
   ConnectionInvalidated,
   ConnectedElsewhere,
+  PossibleCaptiveNetwork,
 
   BackupValidation,
 
@@ -65,6 +66,53 @@ export enum ErrorCode {
   KeyTransparencyVerificationFailed,
 
   IncrementalMacVerificationFailed,
+
+  RequestUnauthorized,
+  MismatchedDevices,
+
+  ServiceIdNotFound,
+
+  UploadTooLarge,
+}
+
+/** Called out as a separate type so it's not confused with a normal ServiceIdBinary. */
+type ServiceIdFixedWidthBinary = Uint8Array<ArrayBuffer>;
+
+/**
+ * A failure sending to a recipient on account of not being up to date on their devices.
+ *
+ * An entry in {@link MismatchedDevicesError}. Each entry represents a recipient that has either
+ * added, removed, or relinked some devices in their account (potentially including their primary
+ * device), as represented by the {@link MismatchedDevicesEntry#missingDevices},
+ * {@link MismatchedDevicesEntry#extraDevices}, and {@link MismatchedDevicesEntry#staleDevices}
+ * arrays, respectively. Handling the exception involves removing the "extra" devices and
+ * establishing new sessions for the "missing" and "stale" devices.
+ */
+export class MismatchedDevicesEntry {
+  account: ServiceId;
+  missingDevices: number[];
+  extraDevices: number[];
+  staleDevices: number[];
+
+  constructor({
+    account,
+    missingDevices,
+    extraDevices,
+    staleDevices,
+  }: {
+    account: ServiceId | ServiceIdFixedWidthBinary;
+    missingDevices?: number[];
+    extraDevices?: number[];
+    staleDevices?: number[];
+  }) {
+    this.account =
+      account instanceof ServiceId
+        ? account
+        : ServiceId.parseFromServiceIdFixedWidthBinary(account);
+    this.missingDevices = missingDevices ?? [];
+    this.extraDevices = extraDevices ?? [];
+    this.staleDevices = staleDevices ?? [];
+  }
 }
 
 export class LibSignalErrorBase extends Error {
@@ -261,6 +309,7 @@ export type RateLimitChallengeError = LibSignalErrorBase & {
   code: ErrorCode.RateLimitChallengeError;
   readonly token: string;
   readonly options: Set<'pushChallenge' | 'captcha'>;
+  readonly retryAfterSecs: number | null;
 };
 
 export type ChatServiceInactive = LibSignalErrorBase & {
@@ -281,6 +330,10 @@ export type ConnectionInvalidatedError = LibSignalErrorBase & {
 
 export type ConnectedElsewhereError = LibSignalErrorBase & {
   code: ErrorCode.ConnectedElsewhere;
+};
+
+export type PossibleCaptiveNetworkError = LibSignalErrorBase & {
+  code: ErrorCode.PossibleCaptiveNetwork;
 };
 
 export type SvrDataMissingError = LibSignalErrorBase & {
@@ -325,6 +378,34 @@ export type IncrementalMacVerificationFailed = LibSignalErrorCommon & {
   code: ErrorCode.IncrementalMacVerificationFailed;
 };
 
+export type RequestUnauthorizedError = LibSignalErrorCommon & {
+  code: ErrorCode.RequestUnauthorized;
+};
+
+export type MismatchedDevicesError = LibSignalErrorCommon & {
+  code: ErrorCode.MismatchedDevices;
+  readonly entries: MismatchedDevicesEntry[];
+};
+
+export type ServiceIdNotFound = LibSignalErrorCommon & {
+  code: ErrorCode.ServiceIdNotFound;
+};
+
+export type UploadTooLarge = LibSignalErrorCommon & {
+  code: ErrorCode.UploadTooLarge;
+};
+
+/**
+ * @throws {ChatServiceInactive} if the chat connection has been closed.
+ * @throws {IoError} if an error occurred while communicating with the server.
+ * @throws {RateLimitedError} if the server is rate limiting this client. This is **retryable**
+ * after waiting the designated delay.
+ */
+export type StandardNetworkError =
+  | ChatServiceInactive
+  | IoError
+  | RateLimitedError;
+
 export type LibSignalError =
   | GenericError
   | DuplicatedMessageError
@@ -365,10 +446,15 @@ export type LibSignalError =
   | DeviceDelinkedError
   | ConnectionInvalidatedError
   | ConnectedElsewhereError
+  | PossibleCaptiveNetworkError
   | RateLimitedError
   | RateLimitChallengeError
   | BackupValidationError
   | CancellationError
   | KeyTransparencyError
   | KeyTransparencyVerificationFailed
-  | IncrementalMacVerificationFailed;
+  | IncrementalMacVerificationFailed
+  | RequestUnauthorizedError
+  | MismatchedDevicesError
+  | ServiceIdNotFound
+  | UploadTooLarge;

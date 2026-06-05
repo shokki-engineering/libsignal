@@ -156,7 +156,16 @@ FFI_TESTING_HEADER_PATH=swift/Sources/SignalFfi/signal_ffi_testing.h
 
 if [[ -n "${SHOULD_CBINDGEN}" ]]; then
   check_cbindgen
-  cbindgen --version
+
+  echo "Checking cbindgen version"
+  VERSION=$(cbindgen --version)
+  echo "Found $VERSION"
+
+  EXPECTED_VERSION=$(cat .cbindgen-version)
+  if [ "$VERSION" != "cbindgen $EXPECTED_VERSION" ]; then
+    echo "warning: this script expects cbindgen version $EXPECTED_VERSION, but $VERSION is installed" >&2
+  fi
+
   if [[ -n "${CBINDGEN_VERIFY}" ]]; then
     echo diff -u "${FFI_HEADER_PATH}" "<(cbindgen -q ${RELEASE_BUILD:+--profile release} rust/bridge/ffi)"
     if ! diff -u "${FFI_HEADER_PATH}"  <(cbindgen -q ${RELEASE_BUILD:+--profile release} rust/bridge/ffi); then
@@ -170,6 +179,7 @@ if [[ -n "${SHOULD_CBINDGEN}" ]]; then
       echo 'error: signal_ffi_testing.h not up to date; run' "$0" '--generate-ffi' >&2
       exit 1
     fi
+    cargo run -p libsignal-ffi-native_swift -- --verify
   else
     echo cbindgen ${RELEASE_BUILD:+--profile release} -o "${FFI_HEADER_PATH}" rust/bridge/ffi
     # Use sed to ignore irrelevant cbindgen warnings.
@@ -182,5 +192,6 @@ if [[ -n "${SHOULD_CBINDGEN}" ]]; then
     # shellcheck disable=SC2016
     cbindgen ${RELEASE_BUILD:+--profile release} -o "${FFI_TESTING_HEADER_PATH}" rust/bridge/shared/testing --config rust/bridge/ffi/cbindgen-testing.toml 2>&1 |
       sed '/WARN: Missing `\[defines\]` entry for `feature = "ffi"` in cbindgen config\./ d' >&2
+    cargo run -p libsignal-ffi-native_swift
   fi
 fi

@@ -226,8 +226,11 @@ impl Visit<Scrambler> for proto::AccountData {
             accountSettings,
             backupsSubscriberData,
             svrPin,
-            special_fields: _,
+            bioText,
+            bioEmoji,
             androidSpecificSettings: _,
+            iosSpecificSettings: _,
+            special_fields: _,
         } = self;
 
         profileKey.randomize(&mut visitor.rng);
@@ -244,6 +247,10 @@ impl Visit<Scrambler> for proto::AccountData {
         accountSettings.accept(visitor);
         backupsSubscriberData.accept(visitor);
         svrPin.randomize(&mut visitor.rng);
+        bioText.randomize(&mut visitor.rng);
+        if !bioEmoji.is_empty() {
+            *bioEmoji = REPLACEMENT_EMOJI.to_string();
+        }
     }
 }
 
@@ -297,12 +304,16 @@ impl Visit<Scrambler> for proto::account_data::AccountSettings {
             customChatColors,
             optimizeOnDeviceStorage: _,
             backupTier: _,
-            special_fields: _,
-            showSealedSenderIndicators: _,
+            appTheme: _,
+            callsUseLessDataSetting: _,
             defaultSentMediaQuality: _,
-            mobileAutoDownloadSettings: _,
-            wifiAutoDownloadSettings: _,
+            autoDownloadSettings: _,
             screenLockTimeoutMinutes: _,
+            pinReminders: _,
+            allowSealedSenderFromAnyone: _,
+            allowAutomaticKeyVerification: _,
+            hasSeenAdminDeleteEducationDialog: _,
+            special_fields: _,
         } = self;
 
         defaultChatStyle.accept(visitor);
@@ -473,6 +484,7 @@ impl Visit<Scrambler> for proto::Contact {
             hideStory: _,
             identityKey,
             identityState: _,
+            keyTransparencyData,
             registration,
             nickname,
             systemGivenName,
@@ -522,6 +534,7 @@ impl Visit<Scrambler> for proto::Contact {
         systemFamilyName.randomize(&mut visitor.rng);
         systemNickname.randomize(&mut visitor.rng);
         note.randomize(&mut visitor.rng);
+        keyTransparencyData.randomize(&mut visitor.rng);
     }
 }
 
@@ -584,8 +597,9 @@ impl Visit<Scrambler> for proto::group::GroupSnapshot {
             membersPendingProfileKey,
             membersPendingAdminApproval,
             inviteLinkPassword,
-            announcements_only: _,
-            members_banned,
+            announcementsOnly: _,
+            membersBanned,
+            terminated: _,
             special_fields: _,
         } = self;
         title.accept(visitor);
@@ -599,7 +613,7 @@ impl Visit<Scrambler> for proto::group::GroupSnapshot {
         membersPendingProfileKey.accept(visitor);
         membersPendingAdminApproval.accept(visitor);
         inviteLinkPassword.randomize(&mut visitor.rng);
-        members_banned.accept(visitor);
+        membersBanned.accept(visitor);
     }
 }
 
@@ -628,6 +642,7 @@ impl Visit<Scrambler> for proto::group::AccessControl {
             attributes: _,
             members: _,
             addFromInviteLink: _,
+            memberLabel: _,
             special_fields: _,
         } = self;
     }
@@ -639,9 +654,17 @@ impl Visit<Scrambler> for proto::group::Member {
             userId,
             role: _,
             joinedAtVersion: _,
+            labelEmoji,
+            labelString,
             special_fields: _,
         } = self;
         visitor.replace_service_id(userId);
+        if !labelEmoji.is_empty() {
+            *labelEmoji = REPLACEMENT_EMOJI.to_string();
+        }
+        if !labelString.is_empty() {
+            labelString.randomize(&mut visitor.rng);
+        }
     }
 }
 
@@ -733,7 +756,6 @@ impl Visit<Scrambler> for proto::CallLink {
     fn accept(&mut self, visitor: &mut Scrambler) {
         let Self {
             rootKey,
-            epoch,
             adminKey,
             name,
             restrictions: _,
@@ -741,7 +763,6 @@ impl Visit<Scrambler> for proto::CallLink {
             special_fields: _,
         } = self;
         rootKey.randomize(&mut visitor.rng);
-        epoch.randomize(&mut visitor.rng);
         adminKey.randomize(&mut visitor.rng);
         name.randomize(&mut visitor.rng);
     }
@@ -777,12 +798,17 @@ impl Visit<Scrambler> for proto::ChatItem {
             expiresInMs: _,
             revisions,
             sms: _,
+            pinDetails,
             directionalDetails,
             item,
             special_fields: _,
         } = self;
 
         revisions.accept(visitor);
+
+        if let Some(pin_details) = pinDetails.as_mut() {
+            pin_details.accept(visitor);
+        }
 
         if let Some(details) = directionalDetails {
             use proto::chat_item::DirectionalDetails;
@@ -806,6 +832,7 @@ impl Visit<Scrambler> for proto::ChatItem {
                 Item::ViewOnceMessage(item) => item.accept(visitor),
                 Item::DirectStoryReplyMessage(item) => item.accept(visitor),
                 Item::Poll(item) => item.accept(visitor),
+                Item::AdminDeletedMessage(item) => item.accept(visitor),
             }
         }
     }
@@ -1242,6 +1269,7 @@ impl Visit<Scrambler> for proto::ChatUpdateMessage {
                 Update::GroupCall(update) => update.accept(visitor),
                 Update::LearnedProfileChange(update) => update.accept(visitor),
                 Update::PollTerminate(update) => update.accept(visitor),
+                Update::PinMessage(update) => update.accept(visitor),
             }
         }
     }
@@ -1282,6 +1310,7 @@ impl Visit<Scrambler> for proto::group_change_chat_update::Update {
                 Update::GroupAvatarUpdate(update) => update.accept(visitor),
                 Update::GroupDescriptionUpdate(update) => update.accept(visitor),
                 Update::GroupMembershipAccessLevelChangeUpdate(update) => update.accept(visitor),
+                Update::GroupMemberLabelAccessLevelChangeUpdate(update) => update.accept(visitor),
                 Update::GroupAttributesAccessLevelChangeUpdate(update) => update.accept(visitor),
                 Update::GroupAnnouncementOnlyChangeUpdate(update) => update.accept(visitor),
                 Update::GroupAdminStatusUpdate(update) => update.accept(visitor),
@@ -1310,6 +1339,7 @@ impl Visit<Scrambler> for proto::group_change_chat_update::Update {
                 Update::GroupV2MigrationDroppedMembersUpdate(update) => update.accept(visitor),
                 Update::GroupSequenceOfRequestsAndCancelsUpdate(update) => update.accept(visitor),
                 Update::GroupExpirationTimerUpdate(update) => update.accept(visitor),
+                Update::GroupTerminateChangeUpdate(update) => update.accept(visitor),
             }
         }
     }
@@ -1381,6 +1411,19 @@ impl Visit<Scrambler> for proto::GroupDescriptionUpdate {
 }
 
 impl Visit<Scrambler> for proto::GroupMembershipAccessLevelChangeUpdate {
+    fn accept(&mut self, visitor: &mut Scrambler) {
+        let Self {
+            updaterAci,
+            accessLevel: _,
+            special_fields: _,
+        } = self;
+        if let Some(updater) = updaterAci {
+            visitor.replace_service_id(updater);
+        }
+    }
+}
+
+impl Visit<Scrambler> for proto::GroupMemberLabelAccessLevelChangeUpdate {
     fn accept(&mut self, visitor: &mut Scrambler) {
         let Self {
             updaterAci,
@@ -1747,6 +1790,18 @@ impl Visit<Scrambler> for proto::GroupExpirationTimerUpdate {
     }
 }
 
+impl Visit<Scrambler> for proto::GroupTerminateChangeUpdate {
+    fn accept(&mut self, visitor: &mut Scrambler) {
+        let Self {
+            updaterAci,
+            special_fields: _,
+        } = self;
+        if let Some(updater) = updaterAci {
+            visitor.replace_service_id(updater);
+        }
+    }
+}
+
 impl Visit<Scrambler> for proto::ExpirationTimerChatUpdate {
     fn accept(&mut self, _visitor: &mut Scrambler) {
         let Self {
@@ -2099,10 +2154,12 @@ impl Visit<Scrambler> for proto::Poll {
             allowMultiple: _,
             options,
             hasEnded: _,
+            reactions,
             special_fields: _,
         } = self;
         question.randomize(&mut visitor.rng);
         options.accept(visitor);
+        reactions.accept(visitor);
     }
 }
 
@@ -2114,5 +2171,34 @@ impl Visit<Scrambler> for proto::PollTerminateUpdate {
             special_fields: _,
         } = self;
         question.randomize(&mut visitor.rng);
+    }
+}
+
+impl Visit<Scrambler> for proto::PinMessageUpdate {
+    fn accept(&mut self, _visitor: &mut Scrambler) {
+        let Self {
+            targetSentTimestamp: _,
+            authorId: _,
+            special_fields: _,
+        } = self;
+    }
+}
+
+impl Visit<Scrambler> for proto::AdminDeletedMessage {
+    fn accept(&mut self, _visitor: &mut Scrambler) {
+        let Self {
+            adminId: _,
+            special_fields: _,
+        } = self;
+    }
+}
+
+impl Visit<Scrambler> for proto::chat_item::PinDetails {
+    fn accept(&mut self, _visitor: &mut Scrambler) {
+        let Self {
+            pinnedAtTimestamp: _,
+            pinExpiry: _,
+            special_fields: _,
+        } = self;
     }
 }

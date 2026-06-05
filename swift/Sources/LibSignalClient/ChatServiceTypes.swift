@@ -47,16 +47,18 @@ public struct ChatRequest: Equatable, Sendable {
     // Exposed for testing
     internal class InternalRequest: NativeHandleOwner<SignalMutPointerHttpRequest> {
         convenience init(_ request: ChatRequest) throws {
-            var handle = SignalMutPointerHttpRequest(untyped: nil)
-            if let body = request.body {
-                try body.withUnsafeBorrowedBuffer { body in
-                    try checkError(
-                        signal_http_request_new_with_body(&handle, request.method, request.pathAndQuery, body)
-                    )
+            let handle =
+                if let body = request.body {
+                    try body.withUnsafeBorrowedBuffer { body in
+                        try invokeFnReturningValueByPointer(.init()) {
+                            signal_http_request_new_with_body($0, request.method, request.pathAndQuery, body)
+                        }
+                    }
+                } else {
+                    try invokeFnReturningValueByPointer(.init()) {
+                        signal_http_request_new_without_body($0, request.method, request.pathAndQuery)
+                    }
                 }
-            } else {
-                try checkError(signal_http_request_new_without_body(&handle, request.method, request.pathAndQuery))
-            }
             // Make sure we clean up the handle if there are any errors adding headers.
             self.init(owned: NonNull(handle)!)
 
@@ -116,6 +118,36 @@ public struct ChatRequest: Equatable, Sendable {
                     return headers
                 }
             }
+        }
+
+        internal static func getNextGrpcMessage(_ name: String, _ body: inout Data) -> NSDictionary {
+            var messageOffsets = SignalPairOfu32u32()
+            body.withBorrowed { body in
+                failOnError(
+                    signal_testing_fake_chat_remote_end_next_grpc_message(&messageOffsets, body, 0)
+                )
+            }
+            let message = body.prefix(Int(messageOffsets.second)).dropFirst(Int(messageOffsets.first))
+            body = body.dropFirst(Int(messageOffsets.second))
+
+            let messageJson = message.withBorrowed { message in
+                failOnError {
+                    try invokeFnReturningString {
+                        signal_testing_fake_chat_remote_end_binproto_to_json($0, name, message)
+                    }
+                }
+            }
+            // Not only is this essentially a testing API, we also know binproto_to_json will always
+            // produce a JSON object, which is decoded as a dictionary.
+            // swiftlint:disable:next force_cast
+            return try! JSONSerialization.jsonObject(with: messageJson.data(using: .utf8)!) as! NSDictionary
+        }
+
+        internal func getSingleGrpcMessage(_ name: String) -> NSDictionary {
+            var body = self.body
+            let result = InternalRequest.getNextGrpcMessage(name, &body)
+            precondition(body.isEmpty, "message had trailing data, use getNextGrpcMessage instead")
+            return result
         }
         #endif
     }
@@ -189,13 +221,7 @@ public struct ChatResponse: Equatable, Sendable {
         )
 
         // Avoid copying the body when possible!
-        self.body = Data(
-            bytesNoCopy: rawResponse.body.base,
-            count: rawResponse.body.length,
-            deallocator: .custom { base, length in
-                signal_free_buffer(base, length)
-            }
-        )
+        self.body = Data(consuming: rawResponse.body)
         // Clear it out so it doesn't get freed eagerly.
         rawResponse.body = .init()
 

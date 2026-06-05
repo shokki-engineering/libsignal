@@ -25,6 +25,7 @@ const POINTER_MASK: u8 = 0xC0;
 pub(crate) const MAX_DNS_LABEL_LEN: usize = 63;
 pub(crate) const MAX_DNS_NAME_LEN: usize = 255;
 pub(crate) const MAX_DNS_UDP_MESSAGE_LEN: usize = 512;
+const MAX_DNS_ANSWERS_TO_PARSE: u16 = 1024;
 
 #[derive(displaydoc::Display, Debug, thiserror::Error, Clone)]
 pub enum Error {
@@ -153,9 +154,15 @@ pub fn parse_response<T>(
     let _data_type = reader.read_to::<u16>()?;
     let _data_class = reader.read_to::<u16>()?;
 
-    let mut results = Vec::with_capacity(answers_count.into());
+    let answers_to_parse = answers_count.min(MAX_DNS_ANSWERS_TO_PARSE);
+    if answers_count > MAX_DNS_ANSWERS_TO_PARSE {
+        log::warn!(
+            "DNS response ANCOUNT {answers_count} exceeds limit {MAX_DNS_ANSWERS_TO_PARSE}; truncating"
+        );
+    }
+    let mut results = Vec::with_capacity(answers_to_parse.into());
     let mut min_ttl = u32::MAX;
-    for _ in 0..answers_count {
+    for _ in 0..answers_to_parse {
         let _name = read_name(&mut reader, message)?;
         let data_type = reader.read_to::<u16>()?;
         let _data_class = reader.read_to::<u16>()?;
@@ -269,9 +276,9 @@ mod test {
 
     use assert_matches::assert_matches;
     use const_str::{concat_bytes, ip_addr};
-    use hickory_proto::op::{MessageType, ResponseCode};
+    use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
     use hickory_proto::rr::rdata::{A, CNAME};
-    use hickory_proto::rr::{Name, RData, RecordType};
+    use hickory_proto::rr::{Name, RecordType};
     use hickory_proto::serialize::binary::BinEncodable;
     use itertools::Itertools;
     use tokio::time::Instant;
@@ -285,17 +292,13 @@ mod test {
     #[test]
     fn valid_requests_identical() {
         // build a query using a 3rd-party crate
-        let mut header = hickory_proto::op::Header::new();
-        header
-            .set_message_type(MessageType::Query)
-            .set_id(REQUEST_ID)
-            .set_recursion_desired(true);
+        let mut hickory_message = Message::new(REQUEST_ID, MessageType::Query, OpCode::Query);
+        hickory_message.metadata.recursion_desired = true;
         let mut query = hickory_proto::op::Query::new();
         query
             .set_name(Name::from_str(VALID_DOMAIN).expect("valid name"))
             .set_query_type(RecordType::A);
-        let mut hickory_message = hickory_proto::op::message::Message::new();
-        hickory_message.set_header(header).add_query(query);
+        hickory_message.add_query(query);
         let hickory_message = hickory_message.to_bytes().expect("valid message");
 
         // build our own query
@@ -375,12 +378,12 @@ mod test {
         let response_message = response_bytes(RecordType::A, |message| {
             for ip_and_ttl in expected_ips_and_ttls {
                 let (ip, ttl) = ip_and_ttl;
-                let mut rr = hickory_proto::rr::Record::<RData>::new();
-                rr.set_name(name.clone())
-                    .set_record_type(RecordType::A)
-                    .set_ttl(ttl.as_secs().try_into().unwrap())
-                    .set_data(Some(RData::A(A::from(ip))));
-                message.add_answer(rr);
+                let rr = hickory_proto::rr::Record::from_rdata(
+                    name.clone(),
+                    ttl.as_secs().try_into().unwrap(),
+                    A::from(ip),
+                );
+                message.add_answer(rr.into_record_of_rdata());
             }
         });
 
@@ -453,7 +456,7 @@ mod test {
     fn error_response_code_handled_correctly() {
         let expected_response_code = 2;
         let response_message = response_bytes(RecordType::A, |message| {
-            message.set_response_code(ResponseCode::from_low(expected_response_code));
+            message.metadata.response_code = ResponseCode::from_low(expected_response_code);
         });
 
         // parsing response message
@@ -483,20 +486,13 @@ mod test {
         let response_message = response_bytes(RecordType::A, |message| {
             // add CNAME record
             let cname = Name::from_str("cname.signal.org").unwrap();
-            let mut rr = hickory_proto::rr::Record::<RData>::new();
-            rr.set_name(name.clone())
-                .set_record_type(RecordType::CNAME)
-                .set_ttl(ttl_sec)
-                .set_data(Some(RData::CNAME(CNAME(cname))));
-            message.add_answer(rr);
+            let rr = hickory_proto::rr::Record::from_rdata(name.clone(), ttl_sec, CNAME(cname));
+            message.add_answer(rr.into_record_of_rdata());
 
             // add A record
-            let mut rr = hickory_proto::rr::Record::<RData>::new();
-            rr.set_name(name.clone())
-                .set_record_type(RecordType::A)
-                .set_ttl(ttl_sec)
-                .set_data(Some(RData::A(A::from(expected_ip))));
-            message.add_answer(rr);
+            let rr =
+                hickory_proto::rr::Record::from_rdata(name.clone(), ttl_sec, A::from(expected_ip));
+            message.add_answer(rr.into_record_of_rdata());
         });
 
         // parsing response message
@@ -515,20 +511,17 @@ mod test {
         let ip_to_simulate_error = ip_addr!(v4, "192.0.2.2");
         let response_message = response_bytes(RecordType::A, move |message| {
             // add invalid record
-            let mut rr = hickory_proto::rr::Record::<RData>::new();
-            rr.set_name(name.clone())
-                .set_record_type(RecordType::A)
-                .set_ttl(ttl_sec)
-                .set_data(Some(RData::A(A::from(ip_to_simulate_error))));
-            message.add_answer(rr);
+            let rr = hickory_proto::rr::Record::from_rdata(
+                name.clone(),
+                ttl_sec,
+                A::from(ip_to_simulate_error),
+            );
+            message.add_answer(rr.into_record_of_rdata());
 
             // add A record
-            let mut rr = hickory_proto::rr::Record::<RData>::new();
-            rr.set_name(name.clone())
-                .set_record_type(RecordType::A)
-                .set_ttl(ttl_sec)
-                .set_data(Some(RData::A(A::from(EXPECTED_IP))));
-            message.add_answer(rr);
+            let rr =
+                hickory_proto::rr::Record::from_rdata(name.clone(), ttl_sec, A::from(EXPECTED_IP));
+            message.add_answer(rr.into_record_of_rdata());
         });
 
         // parsing response message
@@ -555,20 +548,16 @@ mod test {
 
     fn response_bytes<F>(record_type: RecordType, builder: F) -> Vec<u8>
     where
-        F: FnOnce(&mut hickory_proto::op::message::Message),
+        F: FnOnce(&mut Message),
     {
-        let mut header = hickory_proto::op::Header::new();
-        header
-            .set_message_type(MessageType::Response)
-            .set_id(REQUEST_ID)
-            .set_recursion_desired(true);
+        let mut hickory_message = Message::new(REQUEST_ID, MessageType::Response, OpCode::Query);
+        hickory_message.metadata.recursion_desired = true;
 
         let name = Name::from_str(VALID_DOMAIN).expect("valid name");
         let mut query = hickory_proto::op::Query::new();
         query.set_name(name.clone()).set_query_type(record_type);
 
-        let mut hickory_message = hickory_proto::op::message::Message::new();
-        hickory_message.set_header(header).add_query(query);
+        hickory_message.add_query(query);
 
         builder(&mut hickory_message);
 

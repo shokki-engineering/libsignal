@@ -8,6 +8,8 @@ use std::ffi::CString;
 use derive_where::derive_where;
 use libsignal_protocol::*;
 
+use crate::support::describe_panic;
+
 #[macro_use]
 mod convert;
 pub use convert::*;
@@ -21,13 +23,15 @@ pub use error::*;
 mod futures;
 pub use futures::*;
 
-mod io;
-pub use io::*;
+// TODO: These re-exports are because of the ffi_arg_type macro expecting all bridging structs to be
+// under the ffi module; eventually we should be able to remove it.
+pub use crate::io::FfiSyncInputStreamStruct;
+pub use crate::protocol::storage::{
+    FfiIdentityKeyStoreStruct, FfiKyberPreKeyStoreStruct, FfiPreKeyStoreStruct,
+    FfiSenderKeyStoreStruct, FfiSessionStoreStruct, FfiSignedPreKeyStoreStruct,
+};
 
-mod storage;
-pub use storage::*;
-
-use crate::support::describe_panic;
+pub type FfiInputStreamStruct = FfiSyncInputStreamStruct;
 
 #[derive(Debug)]
 pub struct NullPointerError;
@@ -51,6 +55,9 @@ impl<T> BorrowedSliceOf<T> {
         Ok(unsafe { std::slice::from_raw_parts(self.base, self.length) })
     }
 }
+
+unsafe impl<T> Send for BorrowedSliceOf<T> where for<'a> &'a [T]: Send {}
+unsafe impl<T> Sync for BorrowedSliceOf<T> where for<'a> &'a [T]: Sync {}
 
 #[repr(C)]
 pub struct BorrowedMutableSliceOf<T> {
@@ -85,7 +92,7 @@ impl<T> OwnedBufferOf<T> {
     /// Converts back into a `Box`ed slice.
     ///
     /// Callers of this function must ensure that
-    /// - the `OwnedBufferOf` was originally created from `Box`
+    /// - the `OwnedBufferOf` was originally created from `Box` (or `default()`)
     /// - any C code operating on the buffer left all its elements in a valid
     ///   state.
     pub unsafe fn into_box(self) -> Box<[T]> {
@@ -98,6 +105,15 @@ impl<T> OwnedBufferOf<T> {
     }
 }
 
+impl<T> Default for OwnedBufferOf<T> {
+    fn default() -> Self {
+        Self {
+            base: std::ptr::null_mut(),
+            length: 0,
+        }
+    }
+}
+
 impl<T> From<Box<[T]>> for OwnedBufferOf<T> {
     fn from(value: Box<[T]>) -> Self {
         let raw = unsafe { Box::into_raw(value).as_mut().expect("just created") };
@@ -105,6 +121,24 @@ impl<T> From<Box<[T]>> for OwnedBufferOf<T> {
             base: raw.as_mut_ptr(),
             length: raw.len(),
         }
+    }
+}
+
+/// A helper trait for types that need to be explicitly destroyed, similar to Neon's `Finalize`.
+///
+/// Meant for use with [`OwnedCallbackStruct`] and the `bridge_callbacks` macro (all
+/// `bridge_callbacks` FFI structs implement `FfiDestroyable`).
+pub trait FfiDestroyable {
+    fn destroy(&mut self);
+}
+
+/// A wrapper around a `bridge_callbacks` struct that calls the `destroy` function on Drop.
+#[derive(derive_more::Deref, derive_more::DerefMut)]
+pub struct OwnedCallbackStruct<T: FfiDestroyable>(pub T);
+
+impl<T: FfiDestroyable> Drop for OwnedCallbackStruct<T> {
+    fn drop(&mut self) {
+        self.0.destroy();
     }
 }
 
@@ -177,7 +211,32 @@ pub struct OptionalBorrowedSliceOf<T> {
     pub value: BorrowedSliceOf<T>,
 }
 
-pub type OptionalUuid = [u8; 17];
+/// A wrapper type for raw UUIDs, because C treats arrays specially in argument position.
+#[repr(C)]
+pub struct Uuid {
+    pub bytes: [u8; 16],
+}
+
+#[derive(Default)]
+#[repr(C)]
+pub struct OptionalUuid {
+    pub present: bool,
+    pub bytes: [u8; 16],
+}
+
+#[repr(C)]
+pub struct PairOf<A, B> {
+    pub first: A,
+    pub second: B,
+}
+
+#[repr(C)]
+#[derive(Default)]
+pub struct OptionalPairOf<A, B> {
+    pub present: bool,
+    pub first: A,
+    pub second: B,
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -263,6 +322,37 @@ pub enum FfiPublicKeyType {
     Kyber,
 }
 
+#[repr(C)]
+pub struct FfiMismatchedDevicesError {
+    pub account: ServiceIdFixedWidthBinaryBytes,
+    pub missing_devices: OwnedBufferOf<u32>,
+    pub extra_devices: OwnedBufferOf<u32>,
+    pub stale_devices: OwnedBufferOf<u32>,
+}
+
+impl FfiMismatchedDevicesError {
+    pub unsafe fn free_buffers(&mut self) {
+        _ = unsafe { std::mem::take(&mut self.missing_devices).into_box() };
+        _ = unsafe { std::mem::take(&mut self.extra_devices).into_box() };
+        _ = unsafe { std::mem::take(&mut self.stale_devices).into_box() };
+    }
+}
+
+#[repr(C)]
+pub struct FfiPreKeysResponse {
+    identity_key: MutPointer<PublicKey>,
+    pre_key_bundles: OwnedBufferOf<MutPointer<PreKeyBundle>>,
+}
+
+#[repr(C)]
+pub struct FfiUploadForm {
+    cdn: u32,
+    key: CStringPtr,
+    header_keys: OwnedBufferOf<CStringPtr>,
+    header_values: OwnedBufferOf<CStringPtr>,
+    signed_upload_url: CStringPtr,
+}
+
 #[cfg_attr(doc, visibility::make(pub))]
 struct UnexpectedPanic(Box<dyn std::any::Any + Send>);
 
@@ -279,7 +369,7 @@ impl std::fmt::Debug for UnexpectedPanic {
 // Swift code considers all opaque pointers to be the same type, but
 // differentiates between the generated named struct types.
 #[repr(C)]
-#[derive(derive_more::From)]
+#[derive(derive_more::From, zerocopy::FromZeros)]
 #[derive_where(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MutPointer<T> {
     raw: *mut T,
@@ -294,6 +384,12 @@ impl<T> MutPointer<T> {
         Self {
             raw: std::ptr::null_mut(),
         }
+    }
+}
+
+impl<T> Default for MutPointer<T> {
+    fn default() -> Self {
+        Self::null()
     }
 }
 

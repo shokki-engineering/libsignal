@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import Native from '../Native.js';
+import * as Native from './Native.js';
 
-export function toJSONString(buffer: Uint8Array): string {
+export function toJSONString(buffer: Uint8Array<ArrayBuffer>): string {
   return Native.MinidumpToJSONString(buffer);
 }

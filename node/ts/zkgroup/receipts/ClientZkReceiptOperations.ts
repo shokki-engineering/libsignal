@@ -5,7 +5,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import ServerPublicParams from '../ServerPublicParams.js';
 import ReceiptCredential from './ReceiptCredential.js';
 import ReceiptCredentialPresentation from './ReceiptCredentialPresentation.js';
@@ -31,7 +31,7 @@ export default class ClientZkReceiptOperations {
   }
 
   createReceiptCredentialRequestContextWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     receiptSerial: ReceiptSerial
   ): ReceiptCredentialRequestContext {
     return new ReceiptCredentialRequestContext(
@@ -67,7 +67,7 @@ export default class ClientZkReceiptOperations {
   }
 
   createReceiptCredentialPresentationWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     receiptCredential: ReceiptCredential
   ): ReceiptCredentialPresentation {
     return new ReceiptCredentialPresentation(

@@ -4,7 +4,7 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 
 import CallLinkPublicParams from './CallLinkPublicParams.js';
 import GenericServerSecretParams from '../GenericServerSecretParams.js';
@@ -13,7 +13,7 @@ import UuidCiphertext from '../groups/UuidCiphertext.js';
 export default class CallLinkAuthCredentialPresentation extends ByteArray {
   private readonly __type?: never;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(
       contents,
       Native.CallLinkAuthCredentialPresentation_CheckValidContents

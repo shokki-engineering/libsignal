@@ -11,9 +11,13 @@ use attest::enclave::Error as EnclaveError;
 use attest::hsm_enclave::Error as HsmEnclaveError;
 use device_transfer::Error as DeviceTransferError;
 use libsignal_account_keys::Error as PinError;
-use libsignal_net::infra::errors::LogSafeDisplay;
+use libsignal_net::infra::errors::{LogSafeDisplay, TransportConnectError};
+use libsignal_net::infra::ws::WebSocketConnectError;
 use libsignal_net_chat::api::RateLimitChallenge;
+use libsignal_net_chat::api::backups::{BackupAuthCredentialRejected, GetUploadFormFailure};
+use libsignal_net_chat::api::keys::GetPreKeysFailure;
 use libsignal_net_chat::api::keytrans::Error as KeyTransError;
+use libsignal_net_chat::api::messages::{MismatchedDeviceError, UploadTooLarge};
 use libsignal_net_chat::api::registration::{RegistrationLock, VerificationCodeNotDeliverable};
 use libsignal_protocol::*;
 use signal_crypto::Error as SignalCryptoError;
@@ -21,7 +25,7 @@ use usernames::{UsernameError, UsernameLinkError};
 use zkgroup::{ZkGroupDeserializationFailure, ZkGroupVerificationFailure};
 
 use super::{FutureCancelled, NullPointerError, UnexpectedPanic};
-use crate::support::{IllegalArgumentError, describe_panic};
+use crate::support::{IllegalArgumentError, WithContext, describe_panic};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
@@ -99,6 +103,7 @@ pub enum SignalErrorCode {
     ChatServiceInactive = 149,
     RequestTimedOut = 150,
     RateLimitChallenge = 151,
+    PossibleCaptiveNetwork = 152,
 
     SvrDataMissing = 160,
     SvrRestoreFailed = 161,
@@ -126,6 +131,12 @@ pub enum SignalErrorCode {
 
     KeyTransparencyError = 210,
     KeyTransparencyVerificationFailed = 211,
+
+    RequestUnauthorized = 220,
+    MismatchedDevices = 221,
+
+    ServiceIdNotFound = 222,
+    UploadTooLarge = 223,
 }
 
 pub trait UpcastAsAny {
@@ -186,6 +197,9 @@ pub trait FfiError: UpcastAsAny + fmt::Debug + Send + 'static {
         Err(WrongErrorKind)
     }
     fn provide_fingerprint_versions(&self) -> Result<FingerprintVersions, WrongErrorKind> {
+        Err(WrongErrorKind)
+    }
+    fn provide_mismatched_device_errors(&self) -> Result<&[MismatchedDeviceError], WrongErrorKind> {
         Err(WrongErrorKind)
     }
 }
@@ -404,6 +418,7 @@ impl IntoFfiError for SignalProtocolError {
             Self::NoKeyTypeIdentifier
             | Self::BadKeyType(_)
             | Self::BadKeyLength(_, _)
+            | Self::InvalidKeyAgreement
             | Self::InvalidMacKeyLength(_)
             | Self::BadKEMKeyType(_)
             | Self::WrongKEMKeyType(_, _)
@@ -622,6 +637,13 @@ impl IntoFfiError for libsignal_net::cdsi::LookupError {
 impl IntoFfiError for libsignal_net::chat::ConnectError {
     fn into_ffi_error(self) -> impl Into<SignalFfiError> {
         match self {
+            // Special case for self-signed certs, in case the app wants to tell the user to switch
+            // networks.
+            Self::WebSocket(WebSocketConnectError::Transport(
+                ref e @ TransportConnectError::SslFailedHandshake(ref reason),
+            )) if reason.is_possible_captive_network() => {
+                SimpleError::new(SignalErrorCode::PossibleCaptiveNetwork, e.to_string()).into()
+            }
             Self::WebSocket(e) => {
                 SimpleError::new(SignalErrorCode::WebSocket, format!("WebSocket error: {e}")).into()
             }
@@ -702,14 +724,118 @@ where
                 SignalErrorCode::RequestTimedOut,
                 self.to_string(),
             )),
-            Self::ServerSideError | Self::Unexpected { log_safe: _ } => {
+            Self::Unexpected { log_safe: _ } => {
                 SimpleError::new(SignalErrorCode::NetworkProtocol, self.to_string()).into()
+            }
+            Self::ServerSideError => {
+                // TODO: "IO error" isn't really apt at all, but it is an existing error code that
+                // the iOS app considers retryable.
+                SimpleError::new(SignalErrorCode::IoError, self.to_string()).into()
             }
             Self::Other(err) => err.into_ffi_error().into(),
             Self::RetryLater(retry_later) => retry_later.into(),
             Self::Challenge(challenge) => challenge.into(),
             Self::Disconnected(d) => d.into_ffi_error().into(),
         }
+    }
+}
+
+impl FfiError for libsignal_net_chat::api::messages::MultiRecipientSendFailure {
+    fn describe(&self) -> Cow<'_, str> {
+        self.to_string().into()
+    }
+
+    fn code(&self) -> SignalErrorCode {
+        match self {
+            Self::Unauthorized => SignalErrorCode::RequestUnauthorized,
+            Self::MismatchedDevices(_) => SignalErrorCode::MismatchedDevices,
+        }
+    }
+
+    fn provide_mismatched_device_errors(&self) -> Result<&[MismatchedDeviceError], WrongErrorKind> {
+        match self {
+            Self::Unauthorized => Err(WrongErrorKind),
+            Self::MismatchedDevices(mismatched_device_errors) => Ok(mismatched_device_errors),
+        }
+    }
+}
+
+impl FfiError for libsignal_net_chat::api::messages::SealedSendFailure {
+    fn describe(&self) -> Cow<'_, str> {
+        self.to_string().into()
+    }
+
+    fn code(&self) -> SignalErrorCode {
+        match self {
+            Self::Unauthorized => SignalErrorCode::RequestUnauthorized,
+            Self::ServiceIdNotFound => SignalErrorCode::ServiceIdNotFound,
+            Self::MismatchedDevices(_) => SignalErrorCode::MismatchedDevices,
+        }
+    }
+
+    fn provide_mismatched_device_errors(&self) -> Result<&[MismatchedDeviceError], WrongErrorKind> {
+        match self {
+            Self::Unauthorized | Self::ServiceIdNotFound => Err(WrongErrorKind),
+            Self::MismatchedDevices(mismatched_device_error) => {
+                Ok(std::slice::from_ref(mismatched_device_error))
+            }
+        }
+    }
+}
+
+impl FfiError for libsignal_net_chat::api::messages::UnsealedSendFailure {
+    fn describe(&self) -> Cow<'_, str> {
+        self.to_string().into()
+    }
+
+    fn code(&self) -> SignalErrorCode {
+        match self {
+            Self::ServiceIdNotFound => SignalErrorCode::ServiceIdNotFound,
+            Self::MismatchedDevices(_) => SignalErrorCode::MismatchedDevices,
+        }
+    }
+
+    fn provide_mismatched_device_errors(&self) -> Result<&[MismatchedDeviceError], WrongErrorKind> {
+        match self {
+            Self::ServiceIdNotFound => Err(WrongErrorKind),
+            Self::MismatchedDevices(mismatched_device_error) => {
+                Ok(std::slice::from_ref(mismatched_device_error))
+            }
+        }
+    }
+}
+
+impl IntoFfiError for UploadTooLarge {
+    fn into_ffi_error(self) -> impl Into<SignalFfiError> {
+        SimpleError::new(SignalErrorCode::UploadTooLarge, self.to_string())
+    }
+}
+
+impl IntoFfiError for GetUploadFormFailure {
+    fn into_ffi_error(self) -> impl Into<SignalFfiError> {
+        SimpleError::new(
+            match self {
+                GetUploadFormFailure::Unauthorized => SignalErrorCode::RequestUnauthorized,
+                GetUploadFormFailure::UploadTooLarge => SignalErrorCode::UploadTooLarge,
+            },
+            self.to_string(),
+        )
+    }
+}
+
+impl IntoFfiError for BackupAuthCredentialRejected {
+    fn into_ffi_error(self) -> impl Into<SignalFfiError> {
+        SimpleError::new(SignalErrorCode::RequestUnauthorized, self.to_string())
+    }
+}
+
+impl IntoFfiError for libsignal_net_chat::api::keys::GetPreKeysFailure {
+    fn into_ffi_error(self) -> impl Into<SignalFfiError> {
+        let code = match self {
+            GetPreKeysFailure::Unauthorized => SignalErrorCode::RequestUnauthorized,
+            GetPreKeysFailure::NotFound => SignalErrorCode::ServiceIdNotFound,
+        };
+        SimpleError::new(code, self.to_string())
     }
 }
 
@@ -1094,7 +1220,7 @@ where
                 SimpleError::new(SignalErrorCode::SvrDataMissing, e.to_string()).into()
             }
             e @ (Self::PreviousBackupDataInvalid
-            | Self::MetadataInvalid
+            | Self::MetadataInvalid(_)
             | Self::DecryptionError(_)) => {
                 SimpleError::new(SignalErrorCode::InvalidArgument, e.to_string()).into()
             }
@@ -1118,6 +1244,13 @@ impl CallbackError {
             Some(value) => Err(Self { value }),
         }
     }
+
+    pub fn log_on_error(operation: &str, value: i32) {
+        match Self::check(value) {
+            Ok(()) => {}
+            Err(value) => log::error!("failed '{operation}' with {value}"),
+        }
+    }
 }
 
 impl fmt::Display for CallbackError {
@@ -1127,3 +1260,40 @@ impl fmt::Display for CallbackError {
 }
 
 impl std::error::Error for CallbackError {}
+
+impl From<WithContext<CallbackError>> for SignalProtocolError {
+    fn from(value: WithContext<CallbackError>) -> Self {
+        let WithContext { operation, inner } = value;
+        SignalProtocolError::for_application_callback(operation)(inner)
+    }
+}
+
+/// This is overly general, but in practice is only used to handle errors converting callback
+/// results.
+impl From<WithContext<SignalFfiError>> for SignalProtocolError {
+    fn from(value: WithContext<SignalFfiError>) -> Self {
+        let WithContext {
+            operation: _,
+            inner,
+        } = value;
+        SignalProtocolError::FfiBindingError(inner.to_string())
+    }
+}
+
+impl From<WithContext<CallbackError>> for std::io::Error {
+    fn from(value: WithContext<CallbackError>) -> Self {
+        std::io::Error::other(SignalProtocolError::from(value))
+    }
+}
+
+/// This is overly general, but in practice is only used to handle errors converting callback
+/// results.
+impl From<WithContext<SignalFfiError>> for std::io::Error {
+    fn from(value: WithContext<SignalFfiError>) -> Self {
+        let WithContext {
+            operation: _,
+            inner,
+        } = value;
+        std::io::Error::other(inner.to_string())
+    }
+}

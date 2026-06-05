@@ -4,14 +4,14 @@
 //
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import UuidCiphertext from '../groups/UuidCiphertext.js';
 import ProfileKeyCiphertext from '../groups/ProfileKeyCiphertext.js';
 
 export default class ProfileKeyCredentialPresentation extends ByteArray {
   private readonly __type?: never;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.ProfileKeyCredentialPresentation_CheckValidContents);
   }
 

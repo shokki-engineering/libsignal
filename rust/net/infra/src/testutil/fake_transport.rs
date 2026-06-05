@@ -61,6 +61,10 @@ impl FakeTransportTarget {
                 }),
                 port: *target_port,
             },
+            ConnectionProxyRoute::Reflector(reflector) => Self::TcpThroughProxy {
+                host: Some(Host::Domain(reflector.target_host.clone())),
+                port: reflector.target_port,
+            },
         }
     }
 }
@@ -81,7 +85,7 @@ impl Display for FakeTransportTarget {
 }
 
 impl From<TcpRoute<IpAddr>> for FakeTransportTarget {
-    fn from(TcpRoute { address, port }: TcpRoute<IpAddr>) -> Self {
+    fn from(TcpRoute { address, port, .. }: TcpRoute<IpAddr>) -> Self {
         Self::Tcp {
             host: address,
             port,

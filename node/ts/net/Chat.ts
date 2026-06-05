@@ -3,11 +3,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import Native, { ServerMessageAck, Wrapper } from '../../Native.js';
+import * as Native from '../Native.js';
 import { LibSignalError } from '../Errors.js';
-import { TokioAsyncContext, Environment } from '../net.js';
+import { Environment, TokioAsyncContext } from '../net.js';
 import * as KT from './KeyTransparency.js';
 import { newNativeHandle } from '../internal.js';
+import { FakeChatRemote } from './FakeChat.js';
 
 const DEFAULT_CHAT_REQUEST_TIMEOUT_MILLIS = 5000;
 
@@ -15,12 +16,19 @@ export type ChatRequest = Readonly<{
   verb: string;
   path: string;
   headers: ReadonlyArray<[string, string]>;
-  body?: Uint8Array;
+  body?: Uint8Array<ArrayBuffer>;
   timeoutMillis?: number;
 }>;
 
 export type RequestOptions = {
   abortSignal?: AbortSignal;
+};
+
+export type UploadForm = {
+  cdn: number;
+  key: string;
+  headers: Map<string, string>;
+  signedUploadUrl: URL;
 };
 
 type ConnectionManager = Native.Wrapper<Native.ConnectionManager>;
@@ -54,7 +62,7 @@ export interface ChatServiceListener extends ConnectionEventsListener {
    * queue and attempt to deliver it again in the future.
    */
   onIncomingMessage: (
-    envelope: Uint8Array,
+    envelope: Uint8Array<ArrayBuffer>,
     timestamp: number,
     ack: ChatServerMessageAck
   ) => void;
@@ -73,6 +81,29 @@ export interface ChatServiceListener extends ConnectionEventsListener {
    * In practice this happens as part of the connecting process.
    */
   onReceivedAlerts?: (alerts: string[]) => void;
+}
+
+export interface ProvisioningConnectionListener
+  extends ConnectionEventsListener {
+  /**
+   * Called at the start of the provisioning process.
+   *
+   * `address` should be considered an opaque token to pass to the primary device (usually via QR
+   * code).
+   *
+   * `ack`'s `send` method can be called immediately to indicate successful delivery of the address.
+   */
+  onReceivedAddress: (address: string, ack: ChatServerMessageAck) => void;
+  /**
+   * Called once when the primary sends an "envelope" via the server (using the address from
+   * {@link #onReceivedAddress()}).
+   *
+   * Once the server receives the `ack` for this message, it will close this connection.
+   */
+  onReceivedEnvelope: (
+    envelope: Uint8Array<ArrayBuffer>,
+    ack: ChatServerMessageAck
+  ) => void;
 }
 
 /**
@@ -109,7 +140,7 @@ export interface ConnectionInfo {
 }
 
 class ConnectionInfoImpl
-  implements Wrapper<Native.ChatConnectionInfo>, ConnectionInfo
+  implements Native.Wrapper<Native.ChatConnectionInfo>, ConnectionInfo
 {
   constructor(public _nativeHandle: Native.ChatConnectionInfo) {}
 
@@ -172,19 +203,23 @@ export class UnauthenticatedChatConnection implements ChatConnection {
    *
    * @param asyncContext the async runtime to use
    * @param listener the listener to send events to
+   * @param grpcOverrides gRPC method names to prefer for typed APIs that have both WS and gRPC
+   * implementations.
    * @returns an {@link UnauthenticatedChatConnection} and handle for the remote
    * end of the fake connection.
    */
   public static fakeConnect(
     asyncContext: TokioAsyncContext,
-    listener: ChatServiceListener
-  ): [UnauthenticatedChatConnection, Wrapper<Native.FakeChatRemoteEnd>] {
+    listener: ChatServiceListener,
+    grpcOverrides?: ReadonlyArray<string>
+  ): [UnauthenticatedChatConnection, FakeChatRemote] {
     const nativeChatListener = makeNativeChatListener(asyncContext, listener);
 
     const fakeChat = newNativeHandle(
       Native.TESTING_FakeChatConnection_Create(
         asyncContext,
         new WeakListenerWrapper(nativeChatListener),
+        grpcOverrides?.join('\n') ?? '',
         ''
       )
     );
@@ -195,14 +230,17 @@ export class UnauthenticatedChatConnection implements ChatConnection {
 
     return [
       new UnauthenticatedChatConnection(asyncContext, chat, nativeChatListener),
-      newNativeHandle(Native.TESTING_FakeChatConnection_TakeRemote(fakeChat)),
+      new FakeChatRemote(
+        asyncContext,
+        Native.TESTING_FakeChatConnection_TakeRemote(fakeChat)
+      ),
     ];
   }
 
   private constructor(
     // Not true-private so that they can be accessed by the "Service" interfaces in chat/.
     readonly _asyncContext: TokioAsyncContext,
-    readonly _chatService: Wrapper<Native.UnauthenticatedChatConnection>,
+    readonly _chatService: Native.Wrapper<Native.UnauthenticatedChatConnection>,
     // Unused except to keep the listener alive since the Rust code only holds a
     // weak reference to the same object.
     private readonly chatListener: Native.ChatListener,
@@ -285,21 +323,25 @@ export class AuthenticatedChatConnection implements ChatConnection {
    *
    * @param asyncContext the async runtime to use
    * @param listener the listener to send events to
+   * @param grpcOverrides gRPC method names to prefer for typed APIs that have both WS and gRPC
+   * implementations.
    * @param alerts alerts to send immediately upon connect
-   * @returns an {@link AuthenticatedChatConnection} and handle for the remote
-   * end of the fake connection.
+   * @returns an {@link AuthenticatedChatConnection} and handle for the remote end of the fake
+   * connection.
    */
   public static fakeConnect(
     asyncContext: TokioAsyncContext,
     listener: ChatServiceListener,
+    grpcOverrides?: ReadonlyArray<string>,
     alerts?: ReadonlyArray<string>
-  ): [AuthenticatedChatConnection, Wrapper<Native.FakeChatRemoteEnd>] {
+  ): [AuthenticatedChatConnection, FakeChatRemote] {
     const nativeChatListener = makeNativeChatListener(asyncContext, listener);
 
     const fakeChat = newNativeHandle(
       Native.TESTING_FakeChatConnection_Create(
         asyncContext,
         new WeakListenerWrapper(nativeChatListener),
+        grpcOverrides?.join('\n') ?? '',
         alerts?.join('\n') ?? ''
       )
     );
@@ -310,13 +352,16 @@ export class AuthenticatedChatConnection implements ChatConnection {
 
     return [
       new AuthenticatedChatConnection(asyncContext, chat, nativeChatListener),
-      newNativeHandle(Native.TESTING_FakeChatConnection_TakeRemote(fakeChat)),
+      new FakeChatRemote(
+        asyncContext,
+        Native.TESTING_FakeChatConnection_TakeRemote(fakeChat)
+      ),
     ];
   }
 
   private constructor(
-    private readonly asyncContext: TokioAsyncContext,
-    private readonly chatService: Wrapper<Native.AuthenticatedChatConnection>,
+    protected readonly asyncContext: TokioAsyncContext,
+    protected readonly chatService: Native.Wrapper<Native.AuthenticatedChatConnection>,
     // Unused except to keep the listener alive since the Rust code only holds a
     // weak reference to the same object.
     private readonly chatListener: Native.ChatListener
@@ -352,6 +397,113 @@ export class AuthenticatedChatConnection implements ChatConnection {
 }
 
 /**
+ * A chat connection used specifically for provisioning linked devices.
+ *
+ * Note that no messages are sent *from* the client for a provisioning connection; all the
+ * interesting functionality is in the events delivered to the {@link ProvisioningConnectionListener}.
+ */
+export class ProvisioningConnection {
+  static async connect(
+    asyncContext: TokioAsyncContext,
+    connectionManager: ConnectionManager,
+    listener: ProvisioningConnectionListener,
+    options?: { abortSignal?: AbortSignal }
+  ): Promise<ProvisioningConnection> {
+    const nativeListener = this.makeNativeProvisioningListener(listener);
+    const connect = Native.ProvisioningChatConnection_connect(
+      asyncContext,
+      connectionManager
+    );
+    const chat = await asyncContext.makeCancellable(
+      options?.abortSignal,
+      connect
+    );
+
+    const connection = newNativeHandle(chat);
+    Native.ProvisioningChatConnection_init_listener(
+      connection,
+      new WeakProvisioningListenerWrapper(nativeListener)
+    );
+
+    return new ProvisioningConnection(asyncContext, connection, nativeListener);
+  }
+
+  /**
+   * Creates a provisioning chat connection backed by a fake remote end.
+   *
+   * @param asyncContext the async runtime to use
+   * @param listener the listener to send events to
+   * @returns a {@link ProvisioningConnection} and handle for the remote
+   * end of the fake connection.
+   */
+  public static fakeConnect(
+    asyncContext: TokioAsyncContext,
+    listener: ProvisioningConnectionListener
+  ): [ProvisioningConnection, FakeChatRemote] {
+    const nativeListener = this.makeNativeProvisioningListener(listener);
+
+    const fakeChat = newNativeHandle(
+      Native.TESTING_FakeChatConnection_CreateProvisioning(
+        asyncContext,
+        new WeakProvisioningListenerWrapper(nativeListener)
+      )
+    );
+
+    const chat = newNativeHandle(
+      Native.TESTING_FakeChatConnection_TakeProvisioningChat(fakeChat)
+    );
+
+    return [
+      new ProvisioningConnection(asyncContext, chat, nativeListener),
+      new FakeChatRemote(
+        asyncContext,
+        Native.TESTING_FakeChatConnection_TakeRemote(fakeChat)
+      ),
+    ];
+  }
+
+  private static makeNativeProvisioningListener(
+    listener: ProvisioningConnectionListener
+  ): Native.ProvisioningListener {
+    return {
+      receivedAddress(address: string, ack: Native.ServerMessageAck): void {
+        listener.onReceivedAddress(address, new ChatServerMessageAck(ack));
+      },
+      receivedEnvelope(
+        envelope: Uint8Array<ArrayBuffer>,
+        ack: Native.ServerMessageAck
+      ): void {
+        listener.onReceivedEnvelope(envelope, new ChatServerMessageAck(ack));
+      },
+      connectionInterrupted(cause: Error | null): void {
+        listener.onConnectionInterrupted(cause as LibSignalError | null);
+      },
+    };
+  }
+
+  private constructor(
+    private readonly asyncContext: TokioAsyncContext,
+    private readonly chatService: Native.Wrapper<Native.ProvisioningChatConnection>,
+    // Unused except to keep the listener alive since the Rust code only holds a
+    // weak reference to the same object.
+    private readonly chatListener: Native.ProvisioningListener
+  ) {}
+
+  disconnect(): Promise<void> {
+    return Native.ProvisioningChatConnection_disconnect(
+      this.asyncContext,
+      this.chatService
+    );
+  }
+
+  connectionInfo(): ConnectionInfo {
+    return new ConnectionInfoImpl(
+      Native.ProvisioningChatConnection_info(this.chatService)
+    );
+  }
+}
+
+/**
  * Holds a {@link Native.ChatListener} by {@link WeakRef} and delegates
  * `ChatListener` calls to it.
  *
@@ -373,21 +525,41 @@ class WeakListenerWrapper implements Native.ChatListener {
   constructor(listener: Native.ChatListener) {
     this.listener = new WeakRef(listener);
   }
-  _connection_interrupted(reason: Error | null): void {
-    this.listener.deref()?._connection_interrupted(reason);
+  connectionInterrupted(reason: Error | null): void {
+    this.listener.deref()?.connectionInterrupted(reason);
   }
-  _incoming_message(
-    envelope: Uint8Array,
+  receivedIncomingMessage(
+    envelope: Uint8Array<ArrayBuffer>,
     timestamp: number,
-    ack: ServerMessageAck
+    ack: Native.ServerMessageAck
   ): void {
-    this.listener.deref()?._incoming_message(envelope, timestamp, ack);
+    this.listener.deref()?.receivedIncomingMessage(envelope, timestamp, ack);
   }
-  _queue_empty(): void {
-    this.listener.deref()?._queue_empty();
+  receivedQueueEmpty(): void {
+    this.listener.deref()?.receivedQueueEmpty();
   }
-  _received_alerts(alerts: string[]): void {
-    this.listener.deref()?._received_alerts(alerts);
+  receivedAlerts(alerts: string[]): void {
+    this.listener.deref()?.receivedAlerts(alerts);
+  }
+}
+
+/** Like {@link WeakListenerWrapper}, but for {@link ProvisioningConnection}. */
+class WeakProvisioningListenerWrapper implements Native.ProvisioningListener {
+  private listener: WeakRef<Native.ProvisioningListener>;
+  constructor(listener: Native.ProvisioningListener) {
+    this.listener = new WeakRef(listener);
+  }
+  receivedAddress(address: string, ack: Native.ServerMessageAck): void {
+    this.listener.deref()?.receivedAddress(address, ack);
+  }
+  receivedEnvelope(
+    envelope: Uint8Array<ArrayBuffer>,
+    ack: Native.ServerMessageAck
+  ): void {
+    this.listener.deref()?.receivedEnvelope(envelope, ack);
+  }
+  connectionInterrupted(reason: Error | null): void {
+    this.listener.deref()?.connectionInterrupted(reason);
   }
 }
 
@@ -397,10 +569,10 @@ function makeNativeChatListener(
 ): Native.ChatListener {
   if ('onQueueEmpty' in listener) {
     return {
-      _incoming_message(
-        envelope: Uint8Array,
+      receivedIncomingMessage(
+        envelope: Uint8Array<ArrayBuffer>,
         timestamp: number,
-        ack: ServerMessageAck
+        ack: Native.ServerMessageAck
       ): void {
         listener.onIncomingMessage(
           envelope,
@@ -408,37 +580,37 @@ function makeNativeChatListener(
           new ChatServerMessageAck(ack)
         );
       },
-      _queue_empty(): void {
+      receivedQueueEmpty(): void {
         listener.onQueueEmpty();
       },
-      _received_alerts(alerts: string[]): void {
+      receivedAlerts(alerts: string[]): void {
         listener.onReceivedAlerts?.(alerts);
       },
-      _connection_interrupted(cause: Error | null): void {
+      connectionInterrupted(cause: Error | null): void {
         listener.onConnectionInterrupted(cause as LibSignalError | null);
       },
     };
   }
 
   return {
-    _incoming_message(
-      _envelope: Uint8Array,
+    receivedIncomingMessage(
+      _envelope: Uint8Array<ArrayBuffer>,
       _timestamp: number,
-      _ack: ServerMessageAck
+      _ack: Native.ServerMessageAck
     ): void {
       throw new Error('Event not supported on unauthenticated connection');
     },
-    _queue_empty(): void {
+    receivedQueueEmpty(): void {
       throw new Error('Event not supported on unauthenticated connection');
     },
-    _received_alerts(alerts: string[]): void {
+    receivedAlerts(alerts: string[]): void {
       if (alerts.length != 0) {
         throw new Error(
           `Got ${alerts.length} unexpected alerts on an unauthenticated connection`
         );
       }
     },
-    _connection_interrupted(cause: Error | null): void {
+    connectionInterrupted(cause: Error | null): void {
       listener.onConnectionInterrupted(cause as LibSignalError);
     },
   };
@@ -446,7 +618,7 @@ function makeNativeChatListener(
 
 export function buildHttpRequest(
   chatRequest: ChatRequest
-): Wrapper<Native.HttpRequest> {
+): Native.Wrapper<Native.HttpRequest> {
   const { verb, path, body, headers } = chatRequest;
   const httpRequest = {
     _nativeHandle: Native.HttpRequest_new(verb, path, body ?? null),

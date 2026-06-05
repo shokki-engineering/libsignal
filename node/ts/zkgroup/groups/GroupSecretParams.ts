@@ -6,7 +6,7 @@
 import { randomBytes } from 'node:crypto';
 
 import ByteArray from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
 import GroupMasterKey from './GroupMasterKey.js';
 import GroupPublicParams from './GroupPublicParams.js';
@@ -20,7 +20,9 @@ export default class GroupSecretParams extends ByteArray {
     return GroupSecretParams.generateWithRandom(random);
   }
 
-  static generateWithRandom(random: Uint8Array): GroupSecretParams {
+  static generateWithRandom(
+    random: Uint8Array<ArrayBuffer>
+  ): GroupSecretParams {
     return new GroupSecretParams(
       Native.GroupSecretParams_GenerateDeterministic(random)
     );
@@ -34,7 +36,7 @@ export default class GroupSecretParams extends ByteArray {
     );
   }
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.GroupSecretParams_CheckValidContents);
   }
 

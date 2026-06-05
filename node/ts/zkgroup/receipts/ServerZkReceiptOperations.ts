@@ -4,7 +4,7 @@
 //
 
 import { randomBytes } from 'node:crypto';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
 import ServerSecretParams from '../ServerSecretParams.js';
 import ReceiptCredentialRequest from './ReceiptCredentialRequest.js';
@@ -33,7 +33,7 @@ export default class ServerZkReceiptOperations {
   }
 
   issueReceiptCredentialWithRandom(
-    random: Uint8Array,
+    random: Uint8Array<ArrayBuffer>,
     receiptCredentialRequest: ReceiptCredentialRequest,
     receiptExpirationTime: number,
     receiptLevel: bigint

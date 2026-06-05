@@ -4,7 +4,7 @@
 //
 
 import type { ReadonlyDeep } from 'type-fest';
-import Native from '../Native.js';
+import * as Native from './Native.js';
 import {
   cdsiLookup,
   CDSRequestOptionsType,
@@ -16,12 +16,19 @@ import {
   UnauthenticatedChatConnection,
   AuthenticatedChatConnection,
   ChatServiceListener,
+  ProvisioningConnection,
+  ProvisioningConnectionListener,
 } from './net/Chat.js';
 import { RegistrationService } from './net/Registration.js';
 import { SvrB } from './net/SvrB.js';
 import { BridgedStringMap, newNativeHandle } from './internal.js';
 export * from './net/CDSI.js';
 export * from './net/Chat.js';
+export * from './net/chat/AuthMessagesService.js';
+export * from './net/chat/UnauthBackupsService.js';
+export * from './net/chat/UnauthKeysService.js';
+export * from './net/chat/UnauthMessagesService.js';
+export * from './net/chat/UnauthProfilesService.js';
 export * from './net/chat/UnauthUsernamesService.js';
 export * from './net/Registration.js';
 export * from './net/SvrB.js';
@@ -55,7 +62,7 @@ export type ChatRequest = Readonly<{
   verb: string;
   path: string;
   headers: ReadonlyArray<[string, string]>;
-  body?: Uint8Array;
+  body?: Uint8Array<ArrayBuffer>;
   timeoutMillis?: number;
 }>;
 
@@ -104,7 +111,8 @@ export type NetConstructorOptions = Readonly<
       TESTING_localServer_cdsiPort: number;
       TESTING_localServer_svr2Port: number;
       TESTING_localServer_svrBPort: number;
-      TESTING_localServer_rootCertificateDer: Uint8Array;
+      TESTING_localServer_rootCertificateDer: Uint8Array<ArrayBuffer>;
+      TESTING_localServer_httpVersion?: 1 | 2;
     }
 >;
 
@@ -119,6 +127,28 @@ export type ProxyOptions = {
 
 /** The "scheme" for Signal TLS proxies. See {@link Net.setProxy()}. */
 export const SIGNAL_TLS_PROXY_SCHEME = 'org.signal.tls';
+
+type WithSuffix<Keys extends readonly string[], Suffix extends string> = {
+  [Key in keyof Keys]: `${Keys[Key]}.${Suffix}`;
+};
+
+function withSuffix<Keys extends readonly string[], Suffix extends string>(
+  keys: Keys,
+  suffix: Suffix
+): WithSuffix<Keys, Suffix> {
+  return keys.map((key) => `${key}.${suffix}`) as WithSuffix<Keys, Suffix>;
+}
+
+const BETA_REMOTE_CONFIG_KEYS = withSuffix(Native.NetRemoteConfigKeys, 'beta');
+// By convention suffix-less keys mean ".prod". These keys predate convention.
+// TODO: Remove this line once all the non-conventional keys have been removed.
+const PROD_REMOTE_CONFIG_KEYS = ['chatPermessageDeflate.prod'] as const;
+
+export const REMOTE_CONFIG_KEYS = [
+  ...Native.NetRemoteConfigKeys,
+  ...BETA_REMOTE_CONFIG_KEYS,
+  ...PROD_REMOTE_CONFIG_KEYS,
+] as const;
 
 export class Net {
   private readonly asyncContext: TokioAsyncContext;
@@ -136,7 +166,8 @@ export class Net {
           options.TESTING_localServer_cdsiPort,
           options.TESTING_localServer_svr2Port,
           options.TESTING_localServer_svrBPort,
-          options.TESTING_localServer_rootCertificateDer
+          options.TESTING_localServer_rootCertificateDer,
+          options.TESTING_localServer_httpVersion ?? 1
         )
       );
     } else {
@@ -231,6 +262,25 @@ export class Net {
       username,
       password,
       receiveStories,
+      listener,
+      options
+    );
+  }
+
+  /**
+   * Creates a new instance of {@link ProvisioningConnection}.
+   *
+   * @param listener the listener for incoming events.
+   * @param options additional options to pass through.
+   * @param options.abortSignal an {@link AbortSignal} that will cancel the connection attempt.
+   */
+  public async connectProvisioning(
+    listener: ProvisioningConnectionListener,
+    options?: { abortSignal?: AbortSignal }
+  ): Promise<ProvisioningConnection> {
+    return ProvisioningConnection.connect(
+      this.asyncContext,
+      this._connectionManager,
       listener,
       options
     );
@@ -399,8 +449,10 @@ export class Net {
     // This does not distinguish between "https://proxy.example" and "https://@proxy.example".
     // This could be done by manually checking `url.href`.
     // But until someone complains about it, let's not worry about it.
-    const username = url.username != '' ? url.username : undefined;
-    const password = url.password != '' ? url.password : undefined;
+    const username =
+      url.username != '' ? decodeURIComponent(url.username) : undefined;
+    const password =
+      url.password != '' ? decodeURIComponent(url.password) : undefined;
 
     const host = url.hostname;
     const port = url.port != '' ? Number.parseInt(url.port, 10) : undefined;
@@ -457,7 +509,9 @@ export class Net {
    * @deprecated Calling without buildVariant is deprecated. Please explicitly specify BuildVariant.Production or BuildVariant.Beta.
    * @param remoteConfig A map containing preprocessed libsignal configuration keys and their associated values.
    */
-  setRemoteConfig(remoteConfig: ReadonlyMap<string, string>): void;
+  setRemoteConfig(
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>
+  ): void;
   /**
    * Updates libsignal's remote configuration settings.
    *
@@ -478,11 +532,11 @@ export class Net {
    * @param buildVariant The build variant (BuildVariant.Production or BuildVariant.Beta) that determines which remote config keys to use.
    */
   setRemoteConfig(
-    remoteConfig: ReadonlyMap<string, string>,
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>,
     buildVariant: BuildVariant
   ): void;
   setRemoteConfig(
-    remoteConfig: ReadonlyMap<string, string>,
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>,
     buildVariant: BuildVariant = BuildVariant.Production
   ): void {
     Native.ConnectionManager_set_remote_config(

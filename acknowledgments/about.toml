@@ -8,7 +8,6 @@ accepted = [
     "ISC",
     "MPL-2.0",
     "AGPL-3.0-only",
-    "OpenSSL",
     "Unicode-3.0",
     "Unicode-DFS-2016",
 ]
@@ -29,7 +28,31 @@ workarounds = [
     "chrono",
     "prost",
     "ring",
+    "tonic",
 ]
+
+
+# The async-compression crates are embedded in a larger repo
+[async-compression.clarify]
+license = "MIT"
+
+[[async-compression.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709"
+
+[compression-codecs.clarify]
+license = "MIT"
+
+[[compression-codecs.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709"
+
+[compression-core.clarify]
+license = "MIT"
+
+[[compression-core.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "88d1e3160df48926ad3310a8ec5699b502889565908f1be7e77cd21282c7a709"
 
 
 # Boring's main license isn't at the root of the repo
@@ -46,7 +69,7 @@ checksum = "48e488ce333f8a1e86a68b2a1df454464037f1ff580b5bff926053c56dbadc2d"
 # and the similar configuration for 'ring' in https://github.com/EmbarkStudios/cargo-about/blob/3bcd3380f606fd468b2836e04cdcf7997d1f3ff8/src/licenses/workarounds/ring.rs
 
 [boring-sys.clarify]
-license = "MIT AND ISC AND OpenSSL"
+license = "MIT AND Apache-2.0"
 
 [[boring-sys.clarify.files]]
 # The MIT license of the Rust code
@@ -55,28 +78,10 @@ license = "MIT"
 checksum = "ad2e7bdef7c00b92eaf4f657a472c7d3f8b36aac3cdc270e65bb0c287eec0d4e"
 
 [[boring-sys.clarify.files]]
-# The original OpenSSL license
+# The Apache 2.0 license of BoringSSL
 path = "deps/boringssl/LICENSE"
-license = "OpenSSL"
-start = "/* ===================================================================="
-end = "*/"
-checksum = "53552a9b197cd0db29bd085d81253e67097eedd713706e8cd2a3cc6c29850ceb"
-
-[[boring-sys.clarify.files]]
-# The ISC license of the Google-written BoringSSL code
-path = "deps/boringssl/LICENSE"
-license = "ISC"
-start = "/* Copyright (c) 2015, Google Inc."
-end = "* CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */"
-checksum = "19c779f8bbc141fa15c14e0a15aacaee2da917f7043af883c90cbef3cd6f4847"
-
-[[boring-sys.clarify.files]]
-# The MIT license of the BoringSSL code in third_party/fiat
-path = "deps/boringssl/LICENSE"
-license = "MIT"
-start = "Copyright (c) 2015-2016 the fiat-crypto authors"
-end = "SOFTWARE."
-checksum = "7d5e1fb4bbd5e89a687f94c3d3826db50e26bd6f4ade136a025dc2080c5bdc85"
+license = "Apache-2.0"
+checksum = "827c8d8fc207c2392794eef9e00fe246f9f61fdcc132556c275be3dd8c3cd97f"
 
 
 # Newer versions of convert_case have a LICENSE file, we'll use that one
@@ -144,6 +149,29 @@ path = "LICENSE"
 checksum = "9a50bad5a51e0ad726ea3a7f4b7b758e1b4d1784e6abefe1367f5bf01e972725"
 
 
+# The jni crates are embedded in larger repos
+[jni.clarify]
+license = "MIT"
+
+[[jni.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960"
+
+[jni-macros.clarify]
+license = "MIT"
+
+[[jni-macros.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960"
+
+[jni-sys-macros.clarify]
+license = "MIT"
+
+[[jni-sys-macros.clarify.git]]
+path = "LICENSE-MIT"
+checksum = "1d85bd754b04ceec93e98e890edd1fa3c6a22e81bcb32135806beeccefa51cd1"
+
+
 # The libcrux crates are embedded in a larger repo.
 [libcrux-hacl-rs.clarify]
 license = "Apache-2.0"
@@ -191,6 +219,13 @@ checksum = "c517c468fc7f8d83319dd8b3743923f6891e0dfbaf7c57a874758c8f39b98564"
 license = "Apache-2.0"
 
 [[libcrux-platform.clarify.git]]
+path = "LICENSE"
+checksum = "c517c468fc7f8d83319dd8b3743923f6891e0dfbaf7c57a874758c8f39b98564"
+
+[libcrux-secrets.clarify]
+license = "Apache-2.0"
+
+[[libcrux-secrets.clarify.git]]
 path = "LICENSE"
 checksum = "c517c468fc7f8d83319dd8b3743923f6891e0dfbaf7c57a874758c8f39b98564"
 
@@ -265,6 +300,29 @@ path = "LICENSE"
 checksum = "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
 
 
+# The pbjson crates are embedded in a larger repo
+[pbjson.clarify]
+license = "MIT"
+
+[[pbjson.clarify.git]]
+path = "LICENSE"
+checksum = "791a00933f2ea7e512856361e026998362241c3918d7be948c24d29441033b55"
+
+[pbjson-build.clarify]
+license = "MIT"
+
+[[pbjson-build.clarify.git]]
+path = "LICENSE"
+checksum = "791a00933f2ea7e512856361e026998362241c3918d7be948c24d29441033b55"
+
+[pbjson-types.clarify]
+license = "MIT"
+
+[[pbjson-types.clarify.git]]
+path = "LICENSE"
+checksum = "791a00933f2ea7e512856361e026998362241c3918d7be948c24d29441033b55"
+
+
 # protobuf-parse has an addendum for the standard Google protobufs
 [protobuf-parse.clarify]
 license = "MIT"
@@ -300,6 +358,22 @@ license = "Apache-2.0"
 [[sync_wrapper.clarify.files]]
 path = "LICENSE"
 checksum = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+
+
+# The tonic-prost crates are embedded in a larger repo
+[tonic-prost.clarify]
+license = "MIT"
+
+[[tonic-prost.clarify.git]]
+path = "LICENSE"
+checksum = "e24a56698aa6feaf3a02272b3624f9dc255d982970c5ed97ac4525a95056a5b3"
+
+[tonic-prost-build.clarify]
+license = "MIT"
+
+[[tonic-prost-build.clarify.git]]
+path = "LICENSE"
+checksum = "e24a56698aa6feaf3a02272b3624f9dc255d982970c5ed97ac4525a95056a5b3"
 
 
 # webpsan is embedded in a larger repo

@@ -25,6 +25,7 @@ signal-media = ["libsignal-bridge/signal-media"]
 # Here for bridge_fn uniformity
 ffi = []
 default = ["ffi"]
+metadata = ["libsignal-bridge/metadata", "libsignal-bridge-testing/metadata"]
 
 [dependencies]
 libsignal-bridge = { workspace = true, features = ["ffi"] }
@@ -40,6 +41,7 @@ hex = { workspace = true }
 log = { workspace = true }
 log-panics = { workspace = true, features = ["with-backtrace"] }
 paste = { workspace = true }
+uuid = { workspace = true }
 zerocopy = { workspace = true }
 
 [target.aarch64-apple-ios.dependencies]

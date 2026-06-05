@@ -14,7 +14,6 @@ use libsignal_bridge_macros::bridge_fn;
 #[cfg(feature = "libsignal-bridge-testing")]
 #[allow(unused_imports)]
 use libsignal_bridge_testing::*;
-use libsignal_protocol::*;
 
 pub mod error;
 pub mod logging;
@@ -82,25 +81,38 @@ pub unsafe extern "C" fn signal_free_bytestring_array(array: BytestringArray) {
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn signal_free_list_of_service_ids(
+    buffer: OwnedBufferOf<libsignal_core::ServiceIdFixedWidthBinaryBytes>,
+) {
+    drop(unsafe { buffer.into_box() })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn signal_free_list_of_mismatched_device_errors(
+    buffer: OwnedBufferOf<FfiMismatchedDevicesError>,
+) {
+    let entries = unsafe { buffer.into_box() };
+    for mut entry in entries {
+        unsafe { entry.free_buffers() };
+    }
+    // The for-in loop already consumed 'entries'; our work is done.
+}
+
+/// This frees a buffer of PreKeyBundle pointers, and _does not_ free the
+/// pointers within the buffer. This _only_ frees the buffer containing
+/// the pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn signal_free_outer_buffer_list_of_prekey_bundles(
+    buffer: OwnedBufferOf<MutPointer<libsignal_protocol::PreKeyBundle>>,
+) {
+    std::mem::drop(unsafe { buffer.into_box() });
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn signal_error_free(err: *mut SignalFfiError) {
     if !err.is_null() {
         let _boxed_err = unsafe { Box::from_raw(err) };
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn signal_identitykeypair_deserialize(
-    private_key: *mut MutPointer<PrivateKey>,
-    public_key: *mut MutPointer<PublicKey>,
-    input: BorrowedSliceOf<c_uchar>,
-) -> *mut SignalFfiError {
-    run_ffi_safe(|| {
-        let input = unsafe { input.as_slice()? };
-        let identity_key_pair = IdentityKeyPair::try_from(input)?;
-        unsafe { write_result_to(public_key, *identity_key_pair.public_key())? };
-        unsafe { write_result_to(private_key, *identity_key_pair.private_key())? };
-        Ok(())
-    })
 }
 
 #[bridge_fn(jni = false, node = false)]

@@ -17,13 +17,20 @@ use libsignal_net::chat;
 use libsignal_protocol::PublicKey;
 use serde::{Deserialize, Serialize};
 
-use super::{CONTENT_TYPE_JSON, TryIntoResponse as _, WsConnection};
+use super::{CONTENT_TYPE_JSON, CustomError, TryIntoResponse as _, WsConnection};
 use crate::api::keytrans::*;
-use crate::api::{RequestError, Unauth};
+use crate::api::{AllowRateLimitChallenges, RequestError, Unauth};
+use crate::logging::DebugAsStrOrBytes;
 
 const SEARCH_PATH: &str = "/v1/key-transparency/search";
 const DISTINGUISHED_PATH: &str = "/v1/key-transparency/distinguished";
 const MONITOR_PATH: &str = "/v1/key-transparency/monitor";
+
+/// Key transparency requests are unauthenticated and thus cannot have challenges.
+///
+/// This is a free constant rather than an associated one (like the other services) because the KT
+/// implementation uses `dyn`, which isn't compatible with associated constants.
+const ALLOW_RATE_LIMIT_CHALLENGES: AllowRateLimitChallenges = AllowRateLimitChallenges::No;
 
 fn common_headers() -> http::HeaderMap {
     http::HeaderMap::from_iter([CONTENT_TYPE_JSON, (ACCEPT, CONTENT_TYPE_JSON.1)])
@@ -80,9 +87,9 @@ impl RawChatSearchRequest {
         Self {
             aci: aci.as_chat_value(),
             aci_identity_key: BASE64_STANDARD.encode(aci_identity_key.serialize()),
-            e164: e164.map(|x| x.0.as_chat_value()),
-            username_hash: username_hash.map(|x| x.as_chat_value()),
-            unidentified_access_key: e164.map(|x| BASE64_STANDARD.encode(&x.1)),
+            e164: e164.as_ref().map(|x| x.0.as_chat_value()),
+            username_hash: username_hash.as_ref().map(|x| x.as_chat_value()),
+            unidentified_access_key: e164.as_ref().map(|x| BASE64_STANDARD.encode(&x.1)),
             last_tree_head_size,
             distinguished_tree_head_size,
         }
@@ -93,7 +100,11 @@ impl From<RawChatSearchRequest> for chat::Request {
     fn from(request: RawChatSearchRequest) -> Self {
         Self {
             method: http::Method::POST,
-            body: Some(serde_json::to_vec(&request).unwrap().into()),
+            body: Some(
+                serde_json::to_vec(&request)
+                    .expect("can convert to JSON")
+                    .into(),
+            ),
             headers: common_headers(),
             path: PathAndQuery::from_static(SEARCH_PATH),
         }
@@ -181,7 +192,11 @@ impl From<RawChatMonitorRequest> for chat::Request {
     fn from(request: RawChatMonitorRequest) -> Self {
         Self {
             method: http::Method::POST,
-            body: Some(serde_json::to_vec(&request).unwrap().into()),
+            body: Some(
+                serde_json::to_vec(&request)
+                    .expect("can convert to JSON")
+                    .into(),
+            ),
             headers: common_headers(),
             path: PathAndQuery::from_static(MONITOR_PATH),
         }
@@ -215,8 +230,12 @@ impl RawChatMonitorRequest {
             e164: e164.map(|e164| {
                 ValueMonitor::for_e164(
                     e164,
-                    account_data.e164.as_ref().unwrap().latest_log_position(),
-                    &account_data.e164.as_ref().unwrap().index,
+                    account_data
+                        .e164
+                        .as_ref()
+                        .expect("checked above")
+                        .latest_log_position(),
+                    &account_data.e164.as_ref().expect("checked above").index,
                 )
             }),
             username_hash: username_hash.as_ref().map(|unh| {
@@ -225,9 +244,13 @@ impl RawChatMonitorRequest {
                     account_data
                         .username_hash
                         .as_ref()
-                        .unwrap()
+                        .expect("checked above")
                         .latest_log_position(),
-                    &account_data.username_hash.as_ref().unwrap().index,
+                    &account_data
+                        .username_hash
+                        .as_ref()
+                        .expect("checked above")
+                        .index,
                 )
             }),
             last_non_distinguished_tree_head_size,
@@ -243,8 +266,8 @@ impl<T: WsConnection> Unauth<T> {
     ) -> Result<Vec<u8>, RequestError<Error>> {
         log::debug!("{}", &request.path.as_str());
         log::debug!(
-            "{}",
-            &String::from_utf8(request.clone().body.unwrap_or_default().to_vec()).unwrap()
+            "{:?}",
+            DebugAsStrOrBytes(request.body.as_deref().unwrap_or_default())
         );
         // All KT requests keep identifying information out of the path+query, so it's okay to log
         // it. The Distinguished request does include the tree size, but that only reveals when the
@@ -263,9 +286,9 @@ impl<T: WsConnection> Unauth<T> {
                 &body_slice[..body_slice.len().min(1024)]
             })
         );
-        let response: RawChatSerializedResponse = response
-            .try_into_response()
-            .map_err(|e| e.into_request_error(|_| None))?;
+        let response: RawChatSerializedResponse = response.try_into_response().map_err(|e| {
+            e.into_request_error(ALLOW_RATE_LIMIT_CHALLENGES, CustomError::no_custom_handling)
+        })?;
         BASE64_STANDARD_NO_PAD
             .decode(&response.serialized_response)
             .map_err(|_| RequestError::Other(Error::InvalidResponse("invalid base64".to_string())))
@@ -331,7 +354,7 @@ impl<T: WsConnection> LowLevelChatApi for Unauth<T> {
 mod test_support {
     use std::time::SystemTime;
 
-    use libsignal_keytrans::{ChatSearchResponse, StoredAccountData};
+    use libsignal_keytrans::ChatSearchResponse;
     use libsignal_net::chat::ChatConnection;
     use libsignal_net::env;
     use libsignal_net::infra::EnableDomainFronting;
@@ -402,7 +425,7 @@ mod test_support {
             &hex::encode(result.tree_root)
         );
 
-        let distinguished_tree = (result.tree_head, result.tree_root);
+        let distinguished_tree = LastTreeHead(result.tree_head, result.tree_root);
 
         prompt("Now advance the tree (and press ENTER)");
 
@@ -437,12 +460,23 @@ mod test_support {
             "The tree did not advance!"
         );
 
-        println!("Stored account data:");
-        println!(
-            "const STORED_ACCOUNT_DATA_{}: &[u8] = &hex!(\"{}\");",
-            last_tree_size,
-            &hex::encode(StoredAccountData::from(account_data.clone()).encode_to_vec())
-        );
+        {
+            let stored_account_data = account_data
+                .clone()
+                .into_stored(
+                    aci.as_search_key(),
+                    Some(test_account::PHONE_NUMBER.as_search_key()),
+                    Some(username_hash.as_search_key()),
+                    SystemTime::now(),
+                )
+                .encode_to_vec();
+            println!("Stored account data:");
+            println!(
+                "const STORED_ACCOUNT_DATA_{}: &[u8] = &hex!(\"{}\");",
+                last_tree_size,
+                &hex::encode(stored_account_data)
+            );
+        }
 
         prompt("Now advance the tree. Yes, again! (and press ENTER)");
 
@@ -462,7 +496,7 @@ mod test_support {
         {
             let search_response = ChatSearchResponse::decode(response_bytes.as_ref())
                 .map_err(|_| Error::InvalidResponse("bad protobuf".to_string()))
-                .and_then(|r| TypedSearchResponse::from_untyped(true, true, r))
+                .and_then(TypedSearchResponse::from_untyped)
                 .expect("valid search response");
 
             let tree_size = search_response.full_tree_head.tree_head.unwrap().tree_size;
@@ -470,7 +504,7 @@ mod test_support {
         }
 
         println!(
-            "const CHAT_SEARCH_RESPONSE_VALID_AT: Duration = Duration::from_secs({});",
+            "Update the net/tests/data/chat_response_valid_at.in file to: `Duration::from_secs({})`",
             SystemTime::UNIX_EPOCH.elapsed().unwrap().as_secs()
         );
 
@@ -486,6 +520,9 @@ mod test {
 
     use assert_matches::assert_matches;
     use libsignal_keytrans::LocalStateUpdate;
+    use libsignal_protocol::IdentityKeyPair;
+    use rand::TryRngCore;
+    use rand::rngs::OsRng;
     use test_case::test_case;
 
     use super::test_support::{
@@ -494,13 +531,19 @@ mod test {
     };
     use super::*;
 
+    fn kt_integration_enabled() -> bool {
+        let run_nonhermetic = std::env::var_os("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_some();
+        let ignore_tests = std::env::var_os("LIBSIGNAL_TESTING_IGNORE_KT_TESTS").is_some();
+        run_nonhermetic && !ignore_tests
+    }
+
     #[tokio::test]
     #[test_case(false, false; "ACI")]
     #[test_case(true, false; "ACI + E164")]
     #[test_case(false, true; "ACI + Username Hash")]
     #[test_case(true, true; "ACI + E164 + Username Hash")]
     async fn search_permutations_integration_test(use_e164: bool, use_username_hash: bool) {
-        if std::env::var("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_err() {
+        if !kt_integration_enabled() {
             println!("SKIPPED: running integration tests is not enabled");
             return;
         }
@@ -537,10 +580,38 @@ mod test {
     }
 
     #[tokio::test]
+    async fn search_with_version_integration_test() {
+        if !kt_integration_enabled() {
+            println!("SKIPPED: running integration tests is not enabled");
+            return;
+        }
+        retry_n(
+            NETWORK_RETRY_COUNT,
+            || async {
+                let chat = make_chat().await;
+                let kt = make_kt(&chat);
+
+                kt.search(
+                    &test_account::aci(),
+                    &test_account::aci_identity_key(),
+                    Some(test_account::e164_pair()),
+                    Some(test_account::username_hash()),
+                    None,
+                    &test_distinguished_tree(),
+                )
+                .await
+            },
+            should_retry,
+        )
+        .await
+        .expect("can search with version");
+    }
+
+    #[tokio::test]
     #[test_case(false; "unknown_distinguished")]
     #[test_case(true; "known_distinguished")]
     async fn distinguished_integration_test(have_last_distinguished: bool) {
-        if std::env::var("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_err() {
+        if !kt_integration_enabled() {
             println!("SKIPPED: running integration tests is not enabled");
             return;
         }
@@ -567,7 +638,7 @@ mod test {
     #[test_case(false, true; "ACI + Username Hash")]
     #[test_case(true, true; "ACI + E164 + Username Hash")]
     async fn monitor_permutations_integration_test(use_e164: bool, use_username_hash: bool) {
-        if std::env::var("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_err() {
+        if !kt_integration_enabled() {
             println!("SKIPPED: running integration tests is not enabled");
             return;
         }
@@ -620,8 +691,8 @@ mod test {
     }
 
     #[tokio::test]
-    async fn search_for_deleted_account() {
-        if std::env::var("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_err() {
+    async fn search_with_wrong_identity_key_integration() {
+        if !kt_integration_enabled() {
             println!("SKIPPED: running integration tests is not enabled");
             return;
         }
@@ -629,15 +700,15 @@ mod test {
         let chat = make_chat().await;
         let kt = make_kt(&chat);
 
-        // This ACI belongs to account 18005550102
-        // The correct ACI identity key is `hex!("05b65b151f64638b0ea549efb2989e9d726ad2b87fbca1328d872ed6f8fbb7a333")`
-        let aci = Aci::from(uuid::uuid!("4129e9d6-dbb3-4f44-97b4-2dd29f0e2681"));
-
-        let wrong_identity_key = test_account::aci_identity_key();
+        let wrong_identity_key = {
+            let mut rng = OsRng.unwrap_err();
+            let key_pair = IdentityKeyPair::generate(&mut rng);
+            *key_pair.public_key()
+        };
 
         let result = kt
             .search(
-                &aci,
+                &test_account::aci(),
                 &wrong_identity_key,
                 None,
                 None,
@@ -653,7 +724,7 @@ mod test {
 
     #[tokio::test]
     async fn search_for_account_that_isnt() {
-        if std::env::var("LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS").is_err() {
+        if !kt_integration_enabled() {
             println!("SKIPPED: running integration tests is not enabled");
             return;
         }
@@ -677,7 +748,7 @@ mod test {
             .await;
         assert_matches!(
             result,
-            Err(RequestError::Unexpected { log_safe: msg }) if msg == "unexpected response status 404 Not Found"
+            Err(RequestError::Unexpected { log_safe: msg }) if msg == "unexpected response status 403 Forbidden"
         );
     }
 }

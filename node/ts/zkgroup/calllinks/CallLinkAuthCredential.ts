@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto';
 
 import ByteArray from '../internal/ByteArray.js';
 import { RANDOM_LENGTH } from '../internal/Constants.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 
 import CallLinkSecretParams from './CallLinkSecretParams.js';
 import CallLinkAuthCredentialPresentation from './CallLinkAuthCredentialPresentation.js';
@@ -17,7 +17,7 @@ import { Aci } from '../../Address.js';
 export default class CallLinkAuthCredential extends ByteArray {
   private readonly __type?: never;
 
-  constructor(contents: Uint8Array) {
+  constructor(contents: Uint8Array<ArrayBuffer>) {
     super(contents, Native.CallLinkAuthCredential_CheckValidContents);
   }
 
@@ -42,7 +42,7 @@ export default class CallLinkAuthCredential extends ByteArray {
     redemptionTime: number,
     serverParams: GenericServerPublicParams,
     callLinkParams: CallLinkSecretParams,
-    random: Uint8Array
+    random: Uint8Array<ArrayBuffer>
   ): CallLinkAuthCredentialPresentation {
     return new CallLinkAuthCredentialPresentation(
       Native.CallLinkAuthCredential_PresentDeterministic(

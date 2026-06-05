@@ -102,13 +102,48 @@ pub struct MessageBackupValidationOutcome {
 }
 bridge_as_handle!(MessageBackupValidationOutcome, jni = false, node = false);
 
-pub struct ComparableBackup {
-    pub backup: backup::serialize::Backup,
-    pub found_unknown_fields: Vec<FoundUnknownField>,
+/// A (line, error_message) pair for a single exported frame.
+pub type JsonFrameExportResult = (Option<String>, Option<String>);
+
+pub struct BackupJsonExporter {
+    inner: libsignal_message_backup::json::exporter::JsonExporter,
+    initial_chunk: String,
 }
 
-bridge_as_handle!(ComparableBackup);
+impl BackupJsonExporter {
+    pub fn new(
+        inner: libsignal_message_backup::json::exporter::JsonExporter,
+        initial_chunk: String,
+    ) -> Self {
+        Self {
+            inner,
+            initial_chunk,
+        }
+    }
 
+    pub fn initial_chunk(&self) -> &str {
+        &self.initial_chunk
+    }
+
+    pub fn export_frames(
+        &mut self,
+        frames: &[u8],
+    ) -> Result<Vec<JsonFrameExportResult>, libsignal_message_backup::Error> {
+        let results = self.inner.export_frames(frames)?;
+        Ok(results
+            .into_iter()
+            .map(|r| (r.line, r.validation_error.map(|e| e.to_string())))
+            .collect())
+    }
+
+    pub fn finish(&mut self) -> Result<(), libsignal_message_backup::Error> {
+        self.inner.finish()
+    }
+}
+
+bridge_as_handle!(BackupJsonExporter, mut = true, ffi = false);
+impl std::panic::RefUnwindSafe for BackupJsonExporter {}
+static_assertions::assert_impl_all!(BackupJsonExporter: std::panic::UnwindSafe);
 pub struct OnlineBackupValidator {
     backup: Option<backup::PartialBackup<backup::ValidateOnly>>,
 }

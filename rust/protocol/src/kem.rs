@@ -53,11 +53,12 @@
 //! ```
 //!
 mod kyber1024;
-#[cfg(any(feature = "kyber768", test))]
+#[cfg(feature = "kyber768")]
 mod kyber768;
 #[cfg(feature = "mlkem1024")]
 mod mlkem1024;
 
+use std::fmt;
 use std::marker::PhantomData;
 
 use derive_where::derive_where;
@@ -90,7 +91,6 @@ trait Parameters {
     const PUBLIC_KEY_LENGTH: usize;
     const SECRET_KEY_LENGTH: usize;
     const CIPHERTEXT_LENGTH: usize;
-    #[cfg_attr(not(test), expect(dead_code))]
     const SHARED_SECRET_LENGTH: usize;
     fn generate<R: CryptoRng + ?Sized>(
         csprng: &mut R,
@@ -200,7 +200,7 @@ enum DecapsulateError {
 #[derive(Display, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum KeyType {
     /// Kyber768 key
-    #[cfg(any(feature = "kyber768", test))]
+    #[cfg(feature = "kyber768")]
     Kyber768,
     /// Kyber1024 key
     Kyber1024,
@@ -212,7 +212,7 @@ pub enum KeyType {
 impl KeyType {
     fn value(&self) -> u8 {
         match self {
-            #[cfg(any(feature = "kyber768", test))]
+            #[cfg(feature = "kyber768")]
             KeyType::Kyber768 => 0x07,
             KeyType::Kyber1024 => 0x08,
             #[cfg(feature = "mlkem1024")]
@@ -225,7 +225,7 @@ impl KeyType {
     /// Declared `const` to encourage inlining.
     const fn parameters(&self) -> &'static dyn DynParameters {
         match self {
-            #[cfg(any(feature = "kyber768", test))]
+            #[cfg(feature = "kyber768")]
             KeyType::Kyber768 => &kyber768::Parameters,
             KeyType::Kyber1024 => &kyber1024::Parameters,
             #[cfg(feature = "mlkem1024")]
@@ -239,7 +239,7 @@ impl TryFrom<u8> for KeyType {
 
     fn try_from(x: u8) -> Result<Self> {
         match x {
-            #[cfg(any(feature = "kyber768", test))]
+            #[cfg(feature = "kyber768")]
             0x07 => Ok(KeyType::Kyber768),
             0x08 => Ok(KeyType::Kyber1024),
             #[cfg(feature = "mlkem1024")]
@@ -302,6 +302,15 @@ impl<const SIZE: usize> From<libcrux_ml_kem::MlKemPrivateKey<SIZE>> for KeyMater
 pub struct Key<T: KeyKind> {
     key_type: KeyType,
     key_data: KeyMaterial<T>,
+}
+
+impl<T: KeyKind> fmt::Debug for Key<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Key")
+            .field("key_type", &self.key_type)
+            .field("bytes_len", &self.key_data.len())
+            .finish()
+    }
 }
 
 impl<T: KeyKind> Key<T> {
@@ -611,6 +620,7 @@ mod tests {
         assert_eq!(ss_for_recipient, ss_for_sender);
     }
 
+    #[cfg(feature = "kyber768")]
     #[test]
     fn test_kyber768_keypair() {
         let mut rng = rand::rngs::OsRng.unwrap_err();

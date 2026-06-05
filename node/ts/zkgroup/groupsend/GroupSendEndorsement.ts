@@ -4,7 +4,7 @@
 //
 
 import ByteArray, { UNCHECKED_AND_UNCLONED } from '../internal/ByteArray.js';
-import Native from '../../../Native.js';
+import * as Native from '../../Native.js';
 
 import GroupSecretParams from '../groups/GroupSecretParams.js';
 import GroupSendFullToken from './GroupSendFullToken.js';
@@ -45,7 +45,10 @@ import CallLinkSecretParams from '../calllinks/CallLinkSecretParams.js';
  * it's still cheaper than a usual zkgroup presentation.)
  */
 export default class GroupSendEndorsement extends ByteArray {
-  constructor(contents: Uint8Array, marker?: typeof UNCHECKED_AND_UNCLONED) {
+  constructor(
+    contents: Uint8Array<ArrayBuffer>,
+    marker?: typeof UNCHECKED_AND_UNCLONED
+  ) {
     super(contents, marker ?? Native.GroupSendEndorsement_CheckValidContents);
   }
 

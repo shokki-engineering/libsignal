@@ -157,7 +157,7 @@ impl Request for GetSession {
             session_id.as_url_path_segment()
         )
         .parse()
-        .unwrap()
+        .expect("valid path")
     }
     fn log_safe_path(session_id: &SessionId) -> String {
         format!("{VERIFICATION_SESSION_PATH_PREFIX}/{session_id}")
@@ -217,7 +217,7 @@ impl Request for SubmitVerificationCode<'_> {
             session_id.as_url_path_segment()
         )
         .parse()
-        .unwrap()
+        .expect("valid path")
     }
     fn log_safe_path(session_id: &SessionId) -> String {
         format!("{VERIFICATION_SESSION_PATH_PREFIX}/{session_id}/code")
@@ -414,7 +414,7 @@ mod test {
     use std::sync::LazyLock;
     use std::time::Duration;
 
-    use base64::Engine;
+    use base64::prelude::{BASE64_STANDARD, Engine as _};
     use http::StatusCode;
     use libsignal_core::{Aci, Pni};
     use libsignal_net::chat::Response as ChatResponse;
@@ -733,7 +733,7 @@ mod test {
         // Assert as a means of explaining where this value comes from.
         assert_eq!(
             ENCODED_BASIC_AUTH,
-            base64::prelude::BASE64_STANDARD.encode(b"+18005550101:encoded account password")
+            BASE64_STANDARD.encode(b"+18005550101:encoded account password")
         );
 
         let ChatRequest {

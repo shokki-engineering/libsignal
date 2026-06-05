@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import kotlin.io.encoding.Base64;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -30,7 +31,6 @@ import org.signal.libsignal.protocol.ecc.ECPublicKey;
 import org.signal.libsignal.protocol.kem.KEMKeyPair;
 import org.signal.libsignal.protocol.kem.KEMKeyType;
 import org.signal.libsignal.protocol.kem.KEMPublicKey;
-import org.signal.libsignal.util.Base64;
 
 public class RegistrationServiceTest {
 
@@ -266,11 +266,18 @@ public class RegistrationServiceTest {
   }
 
   private static void assertIsPushChallengeError(ThrowingConsumer<String> throwError) {
-    RateLimitChallengeException e =
+    final RateLimitChallengeException e =
         assertRegistrationSessionErrorIs(
             "PushChallenge", RateLimitChallengeException.class, throwError);
     assertEquals(e.getToken(), "token");
     assertEquals(e.getOptions(), EnumSet.of(ChallengeOption.PUSH_CHALLENGE));
+    assertEquals(e.getRetryLater(), null);
+    final RateLimitChallengeException e2 =
+        assertRegistrationSessionErrorIs(
+            "PushChallengeRetryAfter42Seconds", RateLimitChallengeException.class, throwError);
+    assertEquals(e2.getToken(), "token42");
+    assertEquals(e2.getOptions(), EnumSet.of(ChallengeOption.PUSH_CHALLENGE));
+    assertEquals(e2.getRetryLater(), Duration.ofSeconds(42));
   }
 
   @Test
@@ -285,13 +292,13 @@ public class RegistrationServiceTest {
     var fakeRemote = fakeServer.getNextRemote().get();
     var firstRequestAndId = fakeRemote.getNextIncomingRequest().get();
     assertNotNull(firstRequestAndId);
-    var firstRequest = firstRequestAndId.first();
+    var firstRequest = firstRequestAndId.getFirst();
 
     assertEquals(firstRequest.getMethod(), "POST");
     assertEquals(firstRequest.getPathAndQuery(), "/v1/verification/session");
 
     fakeRemote.sendResponse(
-        firstRequestAndId.second(),
+        firstRequestAndId.getSecond(),
         200,
         "OK",
         new String[] {"content-type: application/json"},
@@ -322,7 +329,7 @@ public class RegistrationServiceTest {
 
     var secondRequestAndId = fakeRemote.getNextIncomingRequest().get();
     assertNotNull(secondRequestAndId);
-    var secondRequest = secondRequestAndId.first();
+    var secondRequest = secondRequestAndId.getFirst();
 
     assertEquals(secondRequest.getMethod(), "POST");
     assertEquals(secondRequest.getPathAndQuery(), "/v1/verification/session/fake-session-A/code");
@@ -335,7 +342,7 @@ public class RegistrationServiceTest {
         Map.of("content-type", "application/json", "accept-language", "fr-CA"));
 
     fakeRemote.sendResponse(
-        secondRequestAndId.second(),
+        secondRequestAndId.getSecond(),
         200,
         "OK",
         new String[] {"content-type: application/json"},
@@ -350,6 +357,10 @@ public class RegistrationServiceTest {
             .getBytes());
 
     requestVerification.get();
+  }
+
+  private static String encodeBase64(byte[] input) {
+    return Base64.Default.encode(input, 0, input.length);
   }
 
   @Test
@@ -368,7 +379,7 @@ public class RegistrationServiceTest {
 
     // Send a response to allow the request to complete.
     fakeRemote.sendResponse(
-        firstRequestAndId.second(),
+        firstRequestAndId.getSecond(),
         200,
         "OK",
         new String[] {"content-type: application/json"},
@@ -412,7 +423,7 @@ public class RegistrationServiceTest {
 
     var secondRequestAndId = fakeRemote.getNextIncomingRequest().get();
     assertNotNull(secondRequestAndId);
-    var secondRequest = secondRequestAndId.first();
+    var secondRequest = secondRequestAndId.getFirst();
 
     assertEquals("POST", secondRequest.getMethod());
     assertEquals("/v1/registration", secondRequest.getPathAndQuery());
@@ -422,7 +433,7 @@ public class RegistrationServiceTest {
             "content-type",
             "application/json",
             "authorization",
-            "Basic " + Base64.encodeToString("+18005550123:account password".getBytes())),
+            "Basic " + encodeBase64("+18005550123:account password".getBytes())),
         secondRequest.getHeaders());
 
     var secondRequestJson =
@@ -449,28 +460,26 @@ public class RegistrationServiceTest {
         secondRequestJson.get("accountAttributes"));
 
     assertEquals(
-        Base64.encodeToString(aciKeys.publicKey.serialize()),
-        secondRequestJson.get("aciIdentityKey"));
+        encodeBase64(aciKeys.publicKey.serialize()), secondRequestJson.get("aciIdentityKey"));
     assertEquals(
-        Base64.encodeToString(pniKeys.publicKey.serialize()),
-        secondRequestJson.get("pniIdentityKey"));
+        encodeBase64(pniKeys.publicKey.serialize()), secondRequestJson.get("pniIdentityKey"));
 
     // We don't need to check all the keys, just one of each kind is enough.
     assertEquals(
         Map.of(
-            "signature", Base64.encodeToString("EC signature".getBytes()),
+            "signature", encodeBase64("EC signature".getBytes()),
             "keyId", 1L,
-            "publicKey", Base64.encodeToString(aciKeys.signedPreKey.publicKey().serialize())),
+            "publicKey", encodeBase64(aciKeys.signedPreKey.publicKey().serialize())),
         secondRequestJson.get("aciSignedPreKey"));
     assertEquals(
         Map.of(
-            "signature", Base64.encodeToString("KEM signature".getBytes()),
+            "signature", encodeBase64("KEM signature".getBytes()),
             "keyId", 2L,
-            "publicKey", Base64.encodeToString(aciKeys.pqLastResortPreKey.publicKey().serialize())),
+            "publicKey", encodeBase64(aciKeys.pqLastResortPreKey.publicKey().serialize())),
         secondRequestJson.get("aciPqLastResortPreKey"));
 
     fakeRemote.sendResponse(
-        secondRequestAndId.second(),
+        secondRequestAndId.getSecond(),
         200,
         "OK",
         new String[] {"content-type: application/json"},

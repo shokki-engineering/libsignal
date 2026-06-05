@@ -3,18 +3,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-use proc_macro2::TokenStream as TokenStream2;
+use heck::ToLowerCamelCase;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::*;
+use syn::spanned::Spanned as _;
 use syn::*;
 use syn_mid::Signature;
 
-use crate::BridgingKind;
-use crate::util::{extract_arg_names_and_types, result_type};
+use crate::util::{NiceMetadataNames, extract_arg_names_and_types, nice_metadata, result_type};
+use crate::{BridgingKind, ResultInfo};
 
 pub(crate) fn bridge_fn(
     name: &str,
     sig: &Signature,
     bridging_kind: &BridgingKind,
+    nice: bool,
 ) -> Result<TokenStream2> {
     // Scroll down to the end of the function to see the quote template.
     // This is the best way to understand what we're trying to produce.
@@ -56,20 +59,34 @@ pub(crate) fn bridge_fn(
         }
         BridgingKind::Io { runtime } => bridge_io_body(orig_name, &input_names_and_types, runtime),
     };
-
+    let metadata = nice_metadata(
+        &orig_name.to_string(),
+        sig.asyncness.is_some(),
+        &input_names_and_types,
+        &output,
+        nice,
+        &NiceMetadataNames {
+            backend_name: format_ident!("jni"),
+            metadata_context: format_ident!("KtMetadataContext"),
+            register_arg_converter: format_ident!("register_kt_arg_converter"),
+            register_result_converter: format_ident!("register_kt_result_converter"),
+        },
+    );
     Ok(quote! {
         #[cfg(feature = "jni")]
         #[unsafe(export_name = concat!(env!("LIBSIGNAL_BRIDGE_FN_PREFIX_JNI"), #name))]
         #[allow(non_snake_case)]
         pub unsafe extern "C" fn #wrapper_name<'local>(
-            mut env: ::jni::JNIEnv<'local>,
+            mut env: ::jni::EnvUnowned<'local>,
             // We only generate static methods.
             _class: ::jni::objects::JClass,
             #async_runtime_if_needed
             #(#input_args),*
         ) -> #result_ty {
+            let _trace = libsignal_debug::trace_block!(concat!("bridge::", #name));
             #body
         }
+        #metadata
     })
 }
 
@@ -179,4 +196,190 @@ fn bridge_io_body(
 
 pub(crate) fn name_from_ident(ident: &Ident) -> String {
     ident.to_string().replace('_', "_1")
+}
+
+/// Generates a wrapper around a globally-owned Java object expected to match the bridged
+/// representation of a trait.
+///
+/// The wrapper will be named "Jni{MyTrait}" and will implement the original trait. Additionally, an
+/// alias for `JObject` will be generated named "Java{MyTrait}", for use by gen_java_decl.
+pub(crate) fn bridge_trait(
+    trait_to_bridge: &ItemTrait,
+    java_class_path: &str,
+) -> Result<TokenStream2> {
+    let (_package_name, java_class_name) = java_class_path.rsplit_once('.').ok_or_else(|| {
+        Error::new(
+            Span::call_site(),
+            "JNI name should be a fully qualified class name in \"binary name\" format",
+        )
+    })?;
+
+    let trait_name = &trait_to_bridge.ident;
+    let object_alias_name = format_ident!("Java{}", java_class_name);
+    let wrapper_name = format_ident!("Jni{}", trait_to_bridge.ident);
+
+    let callbacks = trait_to_bridge
+        .items
+        .iter()
+        .map(|item| bridge_callback_item(item, &wrapper_name))
+        .collect::<Result<Vec<_>>>()?;
+    let callback_impls = callbacks.iter().map(|c| &c.implementation);
+
+    Ok(quote! {
+        #[cfg(feature = "jni")]
+        pub type #object_alias_name<'a> = jni::JObject<'a>;
+
+        #[cfg(feature = "jni")]
+        pub struct #wrapper_name(jni::GlobalAndVM);
+
+        #[cfg(feature = "jni")]
+        impl #wrapper_name {
+            pub fn new(
+                env: &mut ::jni::Env<'_>,
+                object: &#object_alias_name<'_>,
+            ) -> Result<Self, jni::BridgeLayerError> {
+                Ok(Self(jni::GlobalAndVM::new(env, object, jni::ClassName(#java_class_path))?))
+            }
+        }
+
+        #[cfg(feature = "jni")]
+        impl #trait_name for #wrapper_name {
+            #(#callback_impls)*
+        }
+    })
+}
+
+struct Callback {
+    implementation: TokenStream2,
+}
+
+fn bridge_callback_item(item: &TraitItem, wrapper_name: &Ident) -> Result<Callback> {
+    let TraitItem::Fn(item) = item else {
+        return Err(Error::new(item.span(), "only fns are supported"));
+    };
+
+    let sig = &item.sig;
+    let req_name = &item.sig.ident;
+    let java_operation_name = req_name.to_string().to_lower_camel_case();
+    let result_info = ResultInfo::from(&sig.output);
+    let result_ty = result_type(&sig.output);
+
+    // fn operation(foo: u32) {
+    //     self.0.attach_and_log_on_error("operation", move |env, object| {
+    //         let java_foo = JValueOwned::from(
+    //             jni::ResultTypeInfo::convert_into(foo, env)?
+    //         );
+    //         call_method_checked(
+    //             env,
+    //             object,
+    //             "operation",
+    //             JniArgs {
+    //                 sig: concat!("(", jni::jni_signature_for::<u32>(), ")V"),
+    //                 args: [JValue::from(&java_foo)],
+    //                 _return: PhantomData
+    //             },
+    //         )
+    //     })
+    // }
+    let arg_conversions = item.sig.inputs.iter().filter_map(|arg| match arg {
+        FnArg::Receiver(_) => None,
+        FnArg::Typed(arg) => {
+            let Pat::Ident(arg_name) = &*arg.pat else {
+                return Some(
+                    Error::new(arg.pat.span(), "only simple argument syntax is supported")
+                        .into_compile_error(),
+                );
+            };
+            let java_arg_name = format_ident!("java_{}", arg_name.ident);
+            Some(quote! {
+                let #java_arg_name = jni::JValueOwned::from(
+                    // Note that we use *Result*TypeInfo for callback arguments,
+                    // since we are passing values from Rust into Java.
+                    jni::ResultTypeInfo::convert_into(#arg_name, env)?
+                ) // note no trailing semicolon
+            })
+        }
+    });
+    let converted_args = item.sig.inputs.iter().filter_map(|arg| match arg {
+        FnArg::Receiver(_) => None,
+        FnArg::Typed(arg) => {
+            let Pat::Ident(arg_name) = &*arg.pat else {
+                return Some(
+                    Error::new(arg.pat.span(), "only simple argument syntax is supported")
+                        .into_compile_error(),
+                );
+            };
+            Some(format_ident!("java_{}", arg_name.ident).into_token_stream())
+        }
+    });
+    let arg_signatures = item.sig.inputs.iter().filter_map(|arg| match arg {
+        FnArg::Receiver(_) => None,
+        FnArg::Typed(arg) => {
+            let ty = &arg.ty;
+            Some(quote!(jni::jni_signature_for::<#ty>()))
+        }
+    });
+    let implementation = if result_info.failable {
+        quote! {
+            // #sig carries everything from `fn` to the return type and possible where-clause.
+            // All we provide is the body.
+            #sig {
+                let _trace = libsignal_debug::trace_block!(concat!(
+                    "bridge_callbacks::",
+                    stringify!(#wrapper_name),
+                    "::",
+                    #java_operation_name,
+                ));
+                self.0.attach(#java_operation_name, move |env, __object| {
+                    #(#arg_conversions;)*
+                    let __signature = ::jni::signature::RuntimeMethodSignature::from_str(
+                        const_str::concat!("(", #(#arg_signatures,)* ")", jni::jni_signature_for_result::<#result_ty>()),
+                    ).expect("valid jni signature");
+                    let __result = jni::call_method_checked(
+                        env,
+                        __object,
+                        #java_operation_name,
+                        jni::JniArgs {
+                            sig: __signature.method_signature(),
+                            args: [#(jni::JValue::from(&#converted_args)),*],
+                            // Some result types have 'local in them, so we have to provide that lifetime here.
+                            _return: std::marker::PhantomData::<for<'local> fn(&'local ()) -> jni_arg_type!(#result_ty)>,
+                        }
+                    )?;
+                    jni::CallbackResultTypeInfo::convert_from_callback(env, __result)
+                })
+            }
+        }
+    } else {
+        quote! {
+            #sig {
+                let _trace = libsignal_debug::trace_block!(concat!(
+                    "bridge_callbacks::",
+                    stringify!(#wrapper_name),
+                    "::",
+                    #java_operation_name,
+                ));
+                // Not implemented: callbacks that *do* have a return value but *don't* have a place for errors.
+                // We can handle those some if we need them.
+                self.0.attach_and_log_on_error(#java_operation_name, move |env, __object| {
+                    #(#arg_conversions;)*
+                    let __signature = ::jni::signature::RuntimeMethodSignature::from_str(
+                        const_str::concat!("(", #(#arg_signatures,)* ")V"),
+                    ).expect("valid jni signature");
+                    jni::call_method_checked(
+                        env,
+                        __object,
+                        #java_operation_name,
+                        jni::JniArgs {
+                            sig: __signature.method_signature(),
+                            args: [#(jni::JValue::from(&#converted_args)),*],
+                            _return: std::marker::PhantomData::<fn(&())>,
+                        }
+                    )
+                });
+            }
+        }
+    };
+
+    Ok(Callback { implementation })
 }

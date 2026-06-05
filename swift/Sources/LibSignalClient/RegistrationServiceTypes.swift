@@ -185,11 +185,18 @@ public struct BadgeEntitlement: Equatable {
     public let id: String
     public let visible: Bool
     public let expiration: TimeInterval
+
+    public init(id: String, visible: Bool, expiration: TimeInterval) {
+        self.id = id
+        self.visible = visible
+        self.expiration = expiration
+    }
 }
 
 public struct BackupEntitlement: Equatable {
     public let expiration: TimeInterval
     public let level: UInt64
+
     public init(expiration: TimeInterval, level: UInt64) {
         self.expiration = expiration
         self.level = level
@@ -264,10 +271,9 @@ public class RegisterAccountAttributes: NativeHandleOwner<SignalMutPointerRegist
                 try registrationLock.withCString { registrationLock in
                     try withUnsafePointer(to: &uak) { unidentifiedAccessKey in
                         try capabilities.withUnsafeBorrowedBytestringArray { capabilities in
-                            var nativeHandle = SignalMutPointerRegistrationAccountAttributes()
-                            try checkError(
+                            try invokeFnReturningValueByPointer(.init()) {
                                 signal_registration_account_attributes_create(
-                                    &nativeHandle,
+                                    $0,
                                     recoveryPassword,
                                     aciRegistrationId,
                                     pniRegistrationId,
@@ -277,8 +283,7 @@ public class RegisterAccountAttributes: NativeHandleOwner<SignalMutPointerRegist
                                     capabilities,
                                     discoverableByPhoneNumber
                                 )
-                            )
-                            return nativeHandle
+                            }
                         }
                     }
                 }
@@ -332,10 +337,9 @@ private func invokeFnReturningOptionalInteger<Result: FixedWidthInteger & Unsign
 }
 
 private func invokeFnReturningBadgeEntitlementArray(
-    fn: (_ out: UnsafeMutablePointer<SignalOwnedBufferOfFfiRegisterResponseBadge>) -> SignalFfiErrorRef?
+    fn: (_ out: UnsafeMutablePointer<SignalOwnedBufferOfFfiRegisterResponseBadge>?) -> SignalFfiErrorRef?
 ) throws -> [BadgeEntitlement] {
-    var out = SignalOwnedBufferOfFfiRegisterResponseBadge()
-    try checkError(fn(&out))
+    let out = try invokeFnReturningValueByPointer(.init(), fn: fn)
     defer { signal_free_list_of_register_response_badges(out) }
 
     return UnsafeBufferPointer(start: out.base, count: out.length).map {

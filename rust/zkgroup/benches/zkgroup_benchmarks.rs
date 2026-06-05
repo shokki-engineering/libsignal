@@ -217,11 +217,12 @@ pub fn benchmark_integration_profile(c: &mut Criterion) {
     // Create presentation
     let randomness = zkgroup::TEST_ARRAY_32_5;
 
-    let presentation = server_public_params.create_expiring_profile_key_credential_presentation(
-        randomness,
-        group_secret_params,
-        profile_key_credential,
-    );
+    let presentation: zkgroup::profiles::ExpiringProfileKeyCredentialPresentationV2 =
+        server_public_params.create_expiring_profile_key_credential_presentation(
+            randomness,
+            group_secret_params,
+            profile_key_credential,
+        );
 
     c.bench_function("create_expiring_profile_key_credential_presentation", |b| {
         b.iter(|| {
@@ -229,7 +230,7 @@ pub fn benchmark_integration_profile(c: &mut Criterion) {
                 randomness,
                 group_secret_params,
                 profile_key_credential,
-            )
+            ) as zkgroup::profiles::ExpiringProfileKeyCredentialPresentationV2
         })
     });
 
@@ -276,6 +277,13 @@ pub fn benchmark_group_send_endorsements(c: &mut Criterion) {
 
     let aci = libsignal_core::Aci::from_uuid_bytes(zkgroup::TEST_ARRAY_16);
 
+    // Use cfg!(debug_assertions) as a proxy for "no optimizations".
+    let group_sizes: &[usize] = if cfg!(debug_assertions) {
+        &[50]
+    } else {
+        &[2, 5, 10, 100, 1000]
+    };
+
     let all_members: Vec<libsignal_core::ServiceId> = std::iter::once(aci)
         .chain((1u16..).map(|i| {
             // Generate arbitrary v5 (hash-based) UUIDs for the rest of the group.
@@ -285,7 +293,7 @@ pub fn benchmark_group_send_endorsements(c: &mut Criterion) {
             ))
         }))
         .map(libsignal_core::ServiceId::from)
-        .take(1000)
+        .take(*group_sizes.last().unwrap())
         .collect();
     let all_member_ciphertexts: Vec<_> = all_members
         .iter()
@@ -293,7 +301,7 @@ pub fn benchmark_group_send_endorsements(c: &mut Criterion) {
         .collect();
 
     let mut benchmark_group = c.benchmark_group("group_send_endorsements");
-    for group_size in [2, 5, 10, 100, 1000] {
+    for &group_size in group_sizes {
         let group = &all_members[..group_size];
         let group_ciphertexts = &all_member_ciphertexts[..group_size];
 
