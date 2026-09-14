@@ -79,7 +79,7 @@ impl<'storage, 'param: 'storage, 'context: 'param> jni::ArgTypeInfo<'storage, 'p
 
     fn borrow(
         env: &mut ::jni::Env<'context>,
-        _foreign: &'param Self::ArgType,
+        _foreign: &Self::ArgType,
     ) -> Result<Self::StoredType, jni::BridgeLayerError> {
         Ok(Self::AttachedToJVM(
             env.get_java_vm().expect_no_exceptions()?,
@@ -159,7 +159,7 @@ impl<'a> jni::SimpleArgTypeInfo<'a> for ErrorOnBorrow {
         _env: &mut ::jni::Env<'a>,
         _foreign: &Self::ArgType,
     ) -> Result<Self, jni::BridgeLayerError> {
-        Err(jni::BridgeLayerError::BadArgument(
+        Err(jni::BridgeLayerError::bad_argument(
             "deliberate error".to_string(),
         ))
     }
@@ -231,9 +231,12 @@ impl node::SimpleArgTypeInfo for PanicOnBorrow {
 pub struct PanicOnLoad;
 
 #[cfg(feature = "ffi")]
-impl<'storage> ffi::ArgTypeInfo<'storage> for PanicOnLoad {
+impl ffi::ArgTypeInfoBase for PanicOnLoad {
     type ArgType = *const std::ffi::c_void;
+}
 
+#[cfg(feature = "ffi")]
+impl<'storage> ffi::ArgTypeInfo<'storage> for PanicOnLoad {
     type StoredType = ();
 
     fn borrow(_foreign: Self::ArgType) -> ffi::SignalFfiResult<Self::StoredType> {
@@ -254,7 +257,7 @@ impl<'storage, 'param: 'storage, 'context: 'param> jni::ArgTypeInfo<'storage, 'p
 
     fn borrow(
         env: &mut ::jni::Env<'context>,
-        _foreign: &'param Self::ArgType,
+        _foreign: &Self::ArgType,
     ) -> Result<Self::StoredType, jni::BridgeLayerError> {
         <NeedsCleanup as jni::ArgTypeInfo>::borrow(env, _foreign)
     }
@@ -330,7 +333,7 @@ impl<'a> jni::ResultTypeInfo<'a> for ErrorOnReturn {
         self,
         _env: &mut ::jni::Env<'a>,
     ) -> Result<Self::ResultType, jni::BridgeLayerError> {
-        Err(jni::BridgeLayerError::BadArgument(
+        Err(jni::BridgeLayerError::bad_argument(
             "deliberate error".to_string(),
         ))
     }
@@ -340,8 +343,8 @@ impl<'a> jni::ResultTypeInfo<'a> for ErrorOnReturn {
 impl<'a> node::ResultTypeInfo<'a> for ErrorOnReturn {
     type ResultType = node::JsNull;
 
-    fn convert_into(self, cx: &mut impl node::Context<'a>) -> node::JsResult<'a, Self::ResultType> {
-        cx.throw_type_error("deliberate error")
+    fn convert_into(self, cx: &mut node::Cx<'a>) -> node::JsResult<'a, Self::ResultType> {
+        node::Context::throw_type_error(cx, "deliberate error")
     }
 
     #[cfg(feature = "metadata")]
@@ -378,10 +381,7 @@ impl<'a> jni::ResultTypeInfo<'a> for PanicOnReturn {
 impl<'a> node::ResultTypeInfo<'a> for PanicOnReturn {
     type ResultType = node::JsNull;
 
-    fn convert_into(
-        self,
-        _cx: &mut impl node::Context<'a>,
-    ) -> node::JsResult<'a, Self::ResultType> {
+    fn convert_into(self, _cx: &mut node::Cx<'a>) -> node::JsResult<'a, Self::ResultType> {
         panic!("deliberate panic");
     }
 
@@ -553,18 +553,34 @@ pub enum MyTestEnum {
     },
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[derive(BridgedAsValue)]
+pub enum MySimpleTestEnum {
+    A,
+    B,
+}
+
+#[bridge_fn(nice = true)]
+pub fn TESTING_MySimpleTestEnum_identity(x: MySimpleTestEnum) -> MySimpleTestEnum {
+    x
+}
+
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestPoint_identity(x: MyTestPoint) -> MyTestPoint {
     x
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestStruct_identity(x: MyTestStruct) -> MyTestStruct {
     x
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestEnum_identity(x: MyTestEnum) -> MyTestEnum {
+    x
+}
+
+#[bridge_io(TokioAsyncContext, nice = true, jni = false, ffi = false)]
+pub async fn TESTING_MySimpleTestEnum_identity_async(x: MySimpleTestEnum) -> MySimpleTestEnum {
     x
 }
 
@@ -583,17 +599,156 @@ pub async fn TESTING_MyTestEnum_identity_async(x: MyTestEnum) -> MyTestEnum {
     x
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[bridge_fn(nice = true)]
+pub fn TESTING_MySimpleTestEnum_to_string(x: MySimpleTestEnum) -> String {
+    match x {
+        MySimpleTestEnum::A => "A",
+        MySimpleTestEnum::B => "B",
+    }
+    .to_string()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_MySimpleTestEnum_BridgeVec_to_string(x: BridgeVec<MySimpleTestEnum>) -> String {
+    serde_json::to_string(
+        &x.0.into_iter()
+            .map(TESTING_MySimpleTestEnum_to_string)
+            .collect::<Vec<_>>(),
+    )
+    .expect("JSON succeeds")
+}
+#[bridge_fn(nice = true)]
+fn TESTING_MySimpleTestEnum_BridgeVec_identity(
+    x: BridgeVec<MySimpleTestEnum>,
+) -> BridgeVec<MySimpleTestEnum> {
+    x
+}
+#[bridge_io(TokioAsyncContext, nice = true, jni = false, ffi = false)]
+pub async fn TESTING_MySimpleTestEnum_BridgeVec_identity_async(
+    x: BridgeVec<MySimpleTestEnum>,
+) -> BridgeVec<MySimpleTestEnum> {
+    x
+}
+
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestPoint_to_string(x: MyTestPoint) -> String {
     serde_json::to_string(&x).expect("JSON succeeds")
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestStruct_to_string(x: MyTestStruct) -> String {
     serde_json::to_string(&x).expect("JSON succeeds")
 }
 
-#[bridge_fn(nice = true, jni = false, ffi = false)]
+#[bridge_fn(nice = true)]
 pub fn TESTING_MyTestEnum_to_string(x: MyTestEnum) -> String {
     serde_json::to_string(&x).expect("JSON succeeds")
+}
+
+pub struct MyRemoteDeriveStruct {
+    x: i32,
+    y: i32,
+}
+pub enum MyRemoteDeriveEnum {
+    Unit,
+    Tuple(i32, i32),
+    Record { x: String, y: i32 },
+}
+
+mod remote_derive_test {
+    use libsignal_bridge_macros::BridgedAsValue;
+
+    use crate::*;
+    #[derive(BridgedAsValue)]
+    #[bridge(remote = super::MyRemoteDeriveStruct)]
+    #[allow(unused)] // Since it's a remote derive
+    pub struct MyRemoteDeriveStruct {
+        x: i32,
+        y: i32,
+    }
+    #[derive(BridgedAsValue)]
+    #[bridge(remote = super::MyRemoteDeriveEnum)]
+    #[allow(unused)] // Since it's a remote derive
+    pub enum MyRemoteDeriveEnum {
+        Unit,
+        Tuple(i32, i32),
+        Record { x: String, y: i32 },
+    }
+}
+
+#[bridge_fn(nice = true, jni = false)]
+pub fn TESTING_MyRemoteDeriveEnum_identity(x: MyRemoteDeriveEnum) -> MyRemoteDeriveEnum {
+    x
+}
+
+#[bridge_fn(nice = true, jni = false)]
+pub fn TESTING_MyRemoteDeriveStruct_identity(x: MyRemoteDeriveStruct) -> MyRemoteDeriveStruct {
+    x
+}
+
+#[bridge_fn(nice = true)]
+pub fn TESTING_ReturnIoError() -> BridgedError<std::io::Error> {
+    BridgedError(std::io::Error::other("testing"))
+}
+
+#[bridge_fn(nice = true)]
+pub fn TESTING_ReturnSomeIoError(present: bool) -> Option<BridgedError<std::io::Error>> {
+    present.then(|| BridgedError(std::io::Error::other("testing")))
+}
+
+#[derive(BridgedAsValue, serde::Serialize)]
+#[bridge(
+    ffi_nice_type = "MyNiceTypeStruct",
+    jni_nice_type = "org.signal.libsignal.internal.MyNiceTypeStruct"
+)]
+pub struct MyNiceTypeStructNot {
+    x: i32,
+    y: i32,
+}
+
+#[derive(BridgedAsValue, serde::Serialize)]
+#[bridge(
+    ffi_nice_type = "MyNiceTypeEnum",
+    jni_nice_type = "org.signal.libsignal.internal.MyNiceTypeEnum"
+)]
+pub enum MyNiceTypeEnumNot {
+    Unit,
+    Single(i32),
+}
+
+#[derive(BridgedAsValue, serde::Serialize)]
+#[bridge(
+    ffi_nice_type = "MyNiceTypeSimpleEnum",
+    jni_nice_type = "org.signal.libsignal.internal.MyNiceTypeSimpleEnum"
+)]
+pub enum MyNiceTypeSimpleEnumNot {
+    A,
+    B,
+}
+
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeStruct_identity(x: MyNiceTypeStructNot) -> MyNiceTypeStructNot {
+    x
+}
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeStruct_to_string(x: MyNiceTypeStructNot) -> String {
+    serde_json::to_string(&x).expect("can convert to json")
+}
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeEnum_identity(x: MyNiceTypeEnumNot) -> MyNiceTypeEnumNot {
+    x
+}
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeEnum_to_string(x: MyNiceTypeEnumNot) -> String {
+    serde_json::to_string(&x).expect("can convert to json")
+}
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeSimpleEnum_identity(
+    x: MyNiceTypeSimpleEnumNot,
+) -> MyNiceTypeSimpleEnumNot {
+    x
+}
+#[bridge_fn(nice = true, node = false)]
+pub fn TESTING_MyNiceTypeSimpleEnum_to_string(x: MyNiceTypeSimpleEnumNot) -> String {
+    serde_json::to_string(&x).expect("can convert to json")
 }

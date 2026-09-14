@@ -66,7 +66,7 @@ $ bin/mac_setup.sh
 
 ### First Build and Test
 
-The build currently uses a specific version of the Rust nightly compiler, which
+The build currently uses a specific version of the Rust stable compiler, which
 will be downloaded automatically by cargo. To build and test the basic protocol
 libraries:
 
@@ -79,10 +79,9 @@ $ cargo test
 
 ### Additional Rust Tools
 
-The basic tools above should get you set up for most libsignal Rust development. 
+The basic tools above should get you set up for most libsignal Rust development.
 
-Eventually, you may find that you need some additional Rust tools like `cbindgen` to modify the bridges to the 
-client libraries or `taplo` for code formatting. 
+Eventually, you may find that you need some additional Rust tools like `taplo` for code formatting.
 
 You should always install any Rust tools you need that may affect the build from cargo rather than from your system
 package manager (e.g. `apt` or `brew`). Package managers sometimes contain outdated versions of these tools that can break
@@ -91,7 +90,6 @@ the build with incompatibility issues (especially cbindgen).
 To install the main Rust extra dependencies matching the versions we use, you can run the following commands:
 
 ```shell
-$ cargo +stable install --version "$(cat .cbindgen-version)" --locked cbindgen
 $ cargo +stable install --version "$(cat acknowledgments/cargo-about-version)" --locked cargo-about
 $ cargo +stable install --version "$(cat .taplo-cli-version)" --locked taplo-cli
 $ cargo +stable install cargo-fuzz
@@ -106,12 +104,12 @@ the Android NDK/SDK, and add the Android targets to the Rust compiler, using
 
 ```rustup target add armv7-linux-androideabi aarch64-linux-android i686-linux-android x86_64-linux-android```
 
-Our officially supported JDK version for Android builds is JDK 17, so be sure to install e.g. OpenJDK 17, and then point JAVA_HOME to it.
+Our officially supported JDK version for Android builds is JDK 21, so be sure to install e.g. OpenJDK 21, and then point JAVA_HOME to it.
 
 You can easily do this on macOS via:
 
 ```shell
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ```
 
 On Linux, the way you do this varies by distribution. For Debian based distributions like Ubuntu, you can use:
@@ -143,7 +141,7 @@ $ make
 ```
 
 When exposing new APIs to Java, you will need to run `rust/bridge/jni/bin/gen_java_decl.py` in
-addition to rebuilding. This requires installing the `cbindgen` Rust tool, as detailed above. 
+addition to rebuilding. This requires installing the `cbindgen` Rust tool, as detailed above.
 
 ### Use as a library
 

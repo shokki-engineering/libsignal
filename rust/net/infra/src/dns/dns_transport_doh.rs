@@ -11,6 +11,7 @@ use futures_util::Stream;
 use futures_util::stream::FuturesUnordered;
 use http::uri::PathAndQuery;
 use http::{HeaderValue, Method};
+use libsignal_core::LogSafeDisplay;
 
 use crate::dns::custom_resolver::{DnsQueryResult, DnsTransport};
 use crate::dns::dns_errors::Error;
@@ -18,7 +19,7 @@ use crate::dns::dns_lookup::DnsLookupRequest;
 use crate::dns::dns_message;
 use crate::dns::dns_message::{parse_a_record, parse_aaaa_record};
 use crate::dns::dns_types::ResourceType;
-use crate::errors::{LogSafeDisplay, TransportConnectError};
+use crate::errors::TransportConnectError;
 use crate::http_client::{AggregatingHttp2Client, Http2Connector, HttpConnectError};
 use crate::route::{
     Connector, ConnectorExt, ConnectorFactory, HttpsTlsRoute, TcpRoute, ThrottlingConnector,
@@ -124,11 +125,7 @@ impl DohTransport {
         request: DnsLookupRequest,
         resource_type: ResourceType,
     ) -> dns::Result<DnsQueryResult> {
-        // In DoH, responses are correlated with requests via HTTP,
-        // so request ID should always be 0
-        // https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let request_message =
-            dns_message::create_request_with_id(0, &request.hostname, resource_type)?;
+        let request_message = dns_message::create_request(&request.hostname, resource_type)?;
 
         let (response_parts, response_body) = self
             .http_client

@@ -7,20 +7,26 @@
 //!
 //! AvatarUploadCredential is a MAC-based credential over:
 //! - a timestamp, truncated to day granularity (public, chosen by server at issuance)
-//! - a Pedersen commitment `Cm = [aci_scalar]*H1 + [zk_credential_key_secret]*H2 + [rotation_id]*H3`
-//!   (blinded at issuance, revealed for verification)
+//! - a Pedersen commitment `Cm = [aci_scalar]*H1 + [rotation_id]*H2 + [a1]*H3 + [a2]*H4`
+//!   (blinded at issuance, revealed for verification), where `(a1, a2)` are the two secret scalars
+//!   of the account's ZK credential key.
 //!
-//! The commitment Cm is information-theoretically hiding: even knowing all ACIs, the verifying
-//! server cannot determine which ACI produced a given Cm.
+//! The commitment Cm hides which ACI produced it, even against a harvest-now-decrypt-later quantum
+//! adversary that records the ZK credential public key `A = a1*G_a1 + a2*G_a2`: breaking the
+//! discrete log of `A` yields only the single relation `a1*g_a1 + a2*g_a2`, which leaves `(a1, a2)`
+//! underdetermined and so keeps the `[a1]*H3 + [a2]*H4` blinding terms hidden (provided
+//! `(G_a1, G_a2)` are independent of `(H3, H4)`). Because `(a1, a2)` are derived from a 256-bit
+//! seed (see [`crate::zk_credential_key`]), this hiding is *computational* at the ~128-bit
+//! post-quantum level, not information-theoretic.
 //!
 //! At issuance, the client already knows `rotation_id` (the server returns it when the client sets
-//! its ZK credential key), so the client builds the full `Cm = [aci_scalar]*H1 +
-//! [zk_credential_key_secret]*H2 + [rotation_id]*H3` directly, blinds it, and provides a standalone
-//! proof that the blinded Cm is well-formed for the authenticated ACI and the ZK credential key
-//! known to the server. The server verifies that proof against its own `rotation_id` (it subtracts
-//! `[rotation_id]*H3` while reconstructing the proof's adjusted point), which forces the client to
-//! have used the server's value — so the server still controls the avatar slot rotation ID, and
-//! still never learns Cm because it stays blinded.
+//! its ZK credential key), so the client builds the full `Cm = [aci_scalar]*H1 + [rotation_id]*H2 +
+//! [a1]*H3 + [a2]*H4` directly, blinds it, and provides a standalone proof that the blinded Cm is
+//! well-formed for the authenticated ACI and the ZK credential key known to the server. The server
+//! verifies that proof against its own `rotation_id` (it subtracts `[rotation_id]*H2` while
+//! reconstructing the proof's adjusted point), which forces the client to have used the server's
+//! value — so the server still controls the avatar slot rotation ID, and still never learns Cm
+//! because it stays blinded.
 //!
 //! At presentation, the credential reveals Cm to the verifying server along with a standard
 //! credential validity proof.
@@ -28,42 +34,48 @@
 // We use upper case variable names for curve points by convention.
 #![allow(non_snake_case)]
 
-use curve25519_dalek_signal::ristretto::RistrettoPoint;
-use curve25519_dalek_signal::scalar::Scalar;
-use curve25519_dalek_signal::traits::VartimeMultiscalarMul as _;
+use curve25519_dalek::ristretto::RistrettoPoint;
+use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek::traits::VartimeMultiscalarMul as _;
 use partial_default::PartialDefault;
 use poksho::ShoApi;
 use poksho::shoapi::ShoApiExt as _;
 use serde::{Deserialize, Serialize};
+use zkcredential::attributes::Domain as _;
 
 use crate::common::serialization::ReservedByte;
 use crate::common::sho::Sho;
 use crate::common::simple_types::*;
 use crate::generic_server_params::{GenericServerPublicParams, GenericServerSecretParams};
-use crate::zk_credential_key::{ZkCredentialKeyPair, ZkCredentialPublicKey};
+use crate::zk_credential_key::{ZkCredentialKeyDomain, ZkCredentialKeyPair, ZkCredentialPublicKey};
 use crate::{RANDOMNESS_LEN, ZkGroupVerificationFailure};
 
 // ---------------------------------------------------------------------------
 // System parameters: Pedersen commitment generators
 // ---------------------------------------------------------------------------
 
-/// Independent generators for the avatar commitment `Cm = [aci_scalar]*H1 + [zk_credential_key_secret]*H2 + [rotation_id]*H3`.
+/// Independent generators for the avatar commitment `Cm = [aci_scalar]*H1 + [rotation_id]*H2 +
+/// [a1]*H3 + [a2]*H4`.
 ///
-/// Derived deterministically from a fixed label. H1, H2, and H3 must be independent of each other
-/// and independent of generators used elsewhere (e.g., G_j3 from profile key commitments).
+/// Derived deterministically from a fixed label. H1..H4 must be independent of each other and
+/// independent of generators used elsewhere (e.g., G_j3 from profile key commitments, and crucially
+/// the ZK credential key's `(G_a1, G_a2)` — `(H3, H4)` being independent of `(G_a1, G_a2)` is what
+/// prevents the public key relation from directly revealing the commitment's blinding terms).
 struct AvatarCommitmentParams {
     H1: RistrettoPoint,
     H2: RistrettoPoint,
     H3: RistrettoPoint,
+    H4: RistrettoPoint,
 }
 
 impl AvatarCommitmentParams {
     fn get_hardcoded() -> Self {
-        let mut sho = Sho::new_seed(b"20260329_Signal_AvatarUploadCredential_CommitmentParams");
+        let mut sho = Sho::new_seed(b"20260602_Signal_AvatarUploadCredential_CommitmentParams");
         Self {
             H1: sho.get_point(),
             H2: sho.get_point(),
             H3: sho.get_point(),
+            H4: sho.get_point(),
         }
     }
 }
@@ -95,13 +107,13 @@ const CM_WELL_FORMEDNESS_PROOF_LABEL: &[u8] =
 
 /// The standalone proof that the blinded Cm is well-formed.
 ///
-/// Proves knowledge of (r, zk_credential_key_secret) such that:
+/// Proves knowledge of (r, a1, a2) such that:
 ///   D1      = r * G
-///   D2_adj  = r * Y + zk_credential_key_secret * H2     where D2_adj = D2 - aci_scalar * H1 - rotation_id * H3
-///   ZkCredKeyPub  = zk_credential_key_secret * G
+///   D2_adj       = r * Y + a1 * H3 + a2 * H4   where D2_adj = D2 - aci_scalar * H1 - rotation_id * H2
+///   ZkCredKeyPub = a1 * G_a1 + a2 * G_a2
 ///
-/// The shared "zk_credential_key_secret" label across eqs 2-3 enforces that the blinded Cm uses the same
-/// zk_credential_key_secret as the known ZK credential public key.
+/// The shared "a1"/"a2" labels across eqs 2-3 enforce that the blinded Cm uses the same `(a1, a2)`
+/// as the known ZK credential public key (`ZkCredKeyPub`, i.e. `A = a1*G_a1 + a2*G_a2`).
 #[derive(Serialize, Deserialize, Clone, PartialDefault)]
 struct CmWellFormednessProof {
     poksho_proof: Vec<u8>,
@@ -111,38 +123,42 @@ impl CmWellFormednessProof {
     fn statement() -> poksho::Statement {
         let mut st = poksho::Statement::new();
         // "G" is the Ristretto basepoint, pre-assigned at index 0 by poksho.
-        // ZkCredKeyPub = zk_credential_key_secret * G uses the same basepoint.
         st.add("D1", &[("r", "G")]);
-        st.add("D2_adj", &[("r", "Y"), ("zk_credential_key_secret", "H2")]);
-        st.add("ZkCredKeyPub", &[("zk_credential_key_secret", "G")]);
+        st.add("D2_adj", &[("r", "Y"), ("a1", "H3"), ("a2", "H4")]);
+        st.add("ZkCredKeyPub", &[("a1", "G_a1"), ("a2", "G_a2")]);
         st
     }
 
     fn prove(
         blinding_nonce: Scalar,
-        zk_credential_key_secret: Scalar,
+        a1: Scalar,
+        a2: Scalar,
         blinded_cm: &zkcredential::issuance::blind::BlindedPoint,
         D2_adj: RistrettoPoint,
         blinding_public_key: &zkcredential::issuance::blind::BlindingPublicKey,
         zk_credential_key_pub: RistrettoPoint,
         randomness: [u8; RANDOMNESS_LEN],
     ) -> Self {
-        // `D2_adj = blinded_cm.D2 - [aci_scalar]*H1 - [rotation_id]*H3` is supplied by the caller,
+        // `D2_adj = blinded_cm.D2 - [aci_scalar]*H1 - [rotation_id]*H2` is supplied by the caller,
         // which already computed those public terms while building Cm — so there are no scalar
         // multiplications here. The verifier reconstructs the same point from public values (see
         // `verify`); that reconstruction is what enforces soundness.
         let params = AvatarCommitmentParams::get_hardcoded();
+        let [G_a1, G_a2] = ZkCredentialKeyDomain::G_a();
 
         let mut scalar_args = poksho::ScalarArgs::new();
         scalar_args.add("r", blinding_nonce);
-        scalar_args.add("zk_credential_key_secret", zk_credential_key_secret);
+        scalar_args.add("a1", a1);
+        scalar_args.add("a2", a2);
 
         // Note: "G" is pre-assigned by poksho as the Ristretto basepoint (index 0),
-        // so it must NOT be included in point_args. You'll never guess what this code looked
-        // like before I wrote this comment.
+        // so it must NOT be included in point_args.
         let mut point_args = poksho::PointArgs::new();
         point_args.add("Y", blinding_public_key.Y);
-        point_args.add("H2", params.H2);
+        point_args.add("H3", params.H3);
+        point_args.add("H4", params.H4);
+        point_args.add("G_a1", G_a1);
+        point_args.add("G_a2", G_a2);
 
         point_args.add("D1", blinded_cm.D1);
         point_args.add("D2_adj", D2_adj);
@@ -169,18 +185,22 @@ impl CmWellFormednessProof {
         zk_credential_key_pub: RistrettoPoint,
     ) -> Result<(), ZkGroupVerificationFailure> {
         let params = AvatarCommitmentParams::get_hardcoded();
+        let [G_a1, G_a2] = ZkCredentialKeyDomain::G_a();
         //  Both scalars are public, so vartime is safe.
         let D2_adj = blinded_cm.D2
             - RistrettoPoint::vartime_multiscalar_mul(
                 [aci_scalar, Scalar::from(rotation_id)],
-                [params.H1, params.H3],
+                [params.H1, params.H2],
             );
 
         // Note: "G" is pre-assigned by poksho as the Ristretto basepoint (index 0),
         // so it must NOT be included in point_args.
         let mut point_args = poksho::PointArgs::new();
         point_args.add("Y", blinding_public_key.Y);
-        point_args.add("H2", params.H2);
+        point_args.add("H3", params.H3);
+        point_args.add("H4", params.H4);
+        point_args.add("G_a1", G_a1);
+        point_args.add("G_a2", G_a2);
 
         point_args.add("D1", blinded_cm.D1);
         point_args.add("D2_adj", D2_adj);
@@ -212,20 +232,22 @@ fn aci_to_scalar(aci: libsignal_core::Aci) -> Scalar {
     Scalar::from_bytes_mod_order(scalar_bytes)
 }
 
-/// Computes the avatar upload commitment `Cm = [aci_scalar]*H1 + [zk_credential_key_secret]*H2 +
-/// [rotation_id]*H3`, returning it alongside the *public offset* `[aci_scalar]*H1 +
-/// [rotation_id]*H3`.
+/// Computes the avatar upload commitment `Cm = [aci_scalar]*H1 + [rotation_id]*H2 + [a1]*H3 +
+/// [a2]*H4`, returning it alongside the *public offset* `[aci_scalar]*H1 + [rotation_id]*H2`.
 fn avatar_commitment(
     aci_scalar: Scalar,
-    zk_credential_key_secret: Scalar,
+    secrets: (Scalar, Scalar),
     rotation_id: u64,
 ) -> (RistrettoPoint, RistrettoPoint) {
     let params = AvatarCommitmentParams::get_hardcoded();
+    let (a1, a2) = secrets;
+    // aci_scalar and rotation_id are public, so vartime is safe for the offset.
     let public_offset = RistrettoPoint::vartime_multiscalar_mul(
         [aci_scalar, Scalar::from(rotation_id)],
-        [params.H1, params.H3],
+        [params.H1, params.H2],
     );
-    let cm = public_offset + zk_credential_key_secret * params.H2;
+    // a1 and a2 are secret, so use constant-time scalar multiplication for the blinding terms.
+    let cm = public_offset + a1 * params.H3 + a2 * params.H4;
     (cm, public_offset)
 }
 
@@ -247,15 +269,11 @@ fn check_avatar_upload_credential_redemption_time(
     Ok(())
 }
 
-/// Computes the full avatar commitment `Cm = [aci_scalar]*H1 + [zk_credential_key_secret]*H2 +
-/// [rotation_id]*H3`, discarding the public offset. Used by tests that only need the commitment.
+/// Computes the full avatar commitment `Cm = [aci_scalar]*H1 + [rotation_id]*H2 + [a1]*H3 +
+/// [a2]*H4`, discarding the public offset. Used by tests that only need the commitment.
 #[cfg(test)]
-fn compute_cm(
-    aci_scalar: Scalar,
-    zk_credential_key_secret: Scalar,
-    rotation_id: u64,
-) -> RistrettoPoint {
-    avatar_commitment(aci_scalar, zk_credential_key_secret, rotation_id).0
+fn compute_cm(aci_scalar: Scalar, secrets: (Scalar, Scalar), rotation_id: u64) -> RistrettoPoint {
+    avatar_commitment(aci_scalar, secrets, rotation_id).0
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +296,7 @@ impl AvatarUploadCredentialRequestContext {
     ///
     /// `rotation_id` is the server-chosen avatar slot rotation ID. The client already holds it (the
     /// server returns it when the client sets its ZK credential key), so the client folds it into
-    /// the full commitment `Cm = [aci]*H1 + [zk_credential_key_secret]*H2 + [rotation_id]*H3` here.
+    /// the full commitment `Cm = [aci]*H1 + [rotation_id]*H2 + [a1]*H3 + [a2]*H4` here.
     /// The server later verifies the well-formedness proof against its own `rotation_id`, which
     /// forces the client to have used the server's value.
     pub fn new(
@@ -287,15 +305,14 @@ impl AvatarUploadCredentialRequestContext {
         rotation_id: u64,
         randomness: RandomnessBytes,
     ) -> Self {
-        let zk_credential_key_secret = zk_credential_key_pair.secret();
+        let (a1, a2) = zk_credential_key_pair.secrets();
         let zk_credential_key_pub = zk_credential_key_pair.public_key().point();
 
         let mut sho = poksho::ShoHmacSha256::new(b"20260329_Signal_AvatarUploadCredentialRequest");
         sho.absorb_and_ratchet(&randomness);
 
         let aci_scalar = aci_to_scalar(aci);
-        let (cm, public_offset) =
-            avatar_commitment(aci_scalar, zk_credential_key_secret, rotation_id);
+        let (cm, public_offset) = avatar_commitment(aci_scalar, (a1, a2), rotation_id);
         let cm_point = CommitmentPoint(cm);
 
         let key_pair = zkcredential::issuance::blind::BlindingKeyPair::generate(&mut sho);
@@ -314,7 +331,8 @@ impl AvatarUploadCredentialRequestContext {
 
         let cm_well_formedness_proof = CmWellFormednessProof::prove(
             blinding_nonce,
-            zk_credential_key_secret,
+            a1,
+            a2,
             &blinded_cm,
             D2_adj,
             key_pair.public_key(),
@@ -362,7 +380,7 @@ impl AvatarUploadCredentialRequest {
     /// value will fail proof verification.
     ///
     /// `rotation_id` is a server-chosen value that the client must already have folded into the
-    /// commitment `Cm = [aci]*H1 + [zk_credential_key_secret]*H2 + [rotation_id]*H3`. The server
+    /// commitment `Cm = [aci]*H1 + [rotation_id]*H2 + [a1]*H3 + [a2]*H4`. The server
     /// supplies its own `rotation_id` here; the well-formedness proof is verified against it, so a
     /// client that committed to a different value will fail issuance. The server never learns Cm
     /// (it stays blinded) yet still controls the rotation ID.
@@ -372,7 +390,7 @@ impl AvatarUploadCredentialRequest {
     /// rotated. Otherwise a malicious server can fingerprint a client across
     /// credential issuances by varying `rotation_id` while the client's ACI and
     /// ZK credential key are stable: the server can recompute
-    /// `[delta_rotation_id]*H3` for any candidate (aci, zk_credential_key_pub) pair and check
+    /// `[delta_rotation_id]*H2` for any candidate (aci, zk_credential_key_pub) pair and check
     /// whether the observed Cm-delta matches (of course it would have to test
     /// all pairs because it wouldn't know which ones had the same (aci,zk_credential_key_pub),
     /// but finding a match would still be meaningful). With this invariant,
@@ -393,7 +411,7 @@ impl AvatarUploadCredentialRequest {
         }
 
         // Verify the Cm well-formedness proof against the server-supplied zk_credential_key_pub and
-        // the server's own rotation_id. The verifier strips `[aci]*H1 + [rotation_id]*H3` from the
+        // the server's own rotation_id. The verifier strips `[aci]*H1 + [rotation_id]*H2` from the
         // blinded point, so a mismatched rotation_id fails here.
         let aci_scalar = aci_to_scalar(aci);
         self.cm_well_formedness_proof.verify(
@@ -404,18 +422,29 @@ impl AvatarUploadCredentialRequest {
             zk_credential_key_pub.point(),
         )?;
 
+        // The format change between V0 and V1 doesn't affect AvatarUploadCredentials, so we allow
+        // issuing with whatever credentials are provided.
+        let issue_credential: &dyn Fn(
+            zkcredential::issuance::blind::BlindedIssuanceProofBuilder,
+        ) -> _ = match params {
+            GenericServerSecretParams::V0(params) => {
+                &|builder| builder.issue(&params.credential_key, &self.public_key, randomness)
+            }
+            GenericServerSecretParams::V1(params) => {
+                &|builder| builder.issue(&params.credential_key, &self.public_key, randomness)
+            }
+        };
+
         // Issue the blind credential over (timestamp, Cm). The blinded point already commits to the
-        // full Cm (including [rotation_id]*H3), so no server-side adjustment is needed.
-        let blinded_credential =
-            zkcredential::issuance::IssuanceProofBuilder::new(CREDENTIAL_LABEL)
-                .add_public_attribute(&redemption_time)
-                .add_blinded_revealed_attribute(&self.blinded_cm)
-                .issue(&params.credential_key, &self.public_key, randomness);
+        // full Cm (including [rotation_id]*H2), so no server-side adjustment is needed.
+        let builder = zkcredential::issuance::IssuanceProofBuilder::new(CREDENTIAL_LABEL)
+            .add_public_attribute(&redemption_time)
+            .add_blinded_revealed_attribute(&self.blinded_cm);
 
         Ok(AvatarUploadCredentialResponse {
             reserved: Default::default(),
             redemption_time,
-            blinded_credential,
+            blinded_credential: issue_credential(builder),
         })
     }
 }
@@ -449,21 +478,23 @@ impl AvatarUploadCredentialRequestContext {
         params: &GenericServerPublicParams,
         current_time: Timestamp,
     ) -> Result<AvatarUploadCredential, ZkGroupVerificationFailure> {
+        // The format change between V0 and V1 doesn't affect AvatarUploadCredentials.
+        let credential_key = match params {
+            GenericServerPublicParams::V0(params) => &params.credential_key,
+            GenericServerPublicParams::V1(params) => &params.credential_key,
+        };
+
         if !response.redemption_time.is_day_aligned() {
             return Err(ZkGroupVerificationFailure);
         }
         check_avatar_upload_credential_redemption_time(response.redemption_time, current_time)?;
 
-        // The blinded point already commits to the full Cm (the client folded in [rotation_id]*H3
+        // The blinded point already commits to the full Cm (the client folded in [rotation_id]*H2
         // at request time), so we verify the issuance directly against it — no adjustment needed.
         let credential = zkcredential::issuance::IssuanceProofBuilder::new(CREDENTIAL_LABEL)
             .add_public_attribute(&response.redemption_time)
             .add_blinded_revealed_attribute(&self.blinded_cm)
-            .verify(
-                &params.credential_key,
-                &self.key_pair,
-                response.blinded_credential,
-            )
+            .verify(credential_key, &self.key_pair, response.blinded_credential)
             .map_err(|_| ZkGroupVerificationFailure)?;
 
         Ok(AvatarUploadCredential {
@@ -493,13 +524,23 @@ impl AvatarUploadCredential {
         server_params: &GenericServerPublicParams,
         randomness: RandomnessBytes,
     ) -> AvatarUploadCredentialPresentation {
+        // The format change between V0 and V1 doesn't affect AvatarUploadCredentials.
+        let credential_key = match server_params {
+            GenericServerPublicParams::V0(params) => &params.credential_key,
+            GenericServerPublicParams::V1(params) => &params.credential_key,
+        };
+
         AvatarUploadCredentialPresentation {
             version: Default::default(),
             redemption_time: self.redemption_time,
             cm: self.cm,
             proof: zkcredential::presentation::PresentationProofBuilder::new(CREDENTIAL_LABEL)
                 .add_revealed_attribute(&self.cm)
-                .present(&server_params.credential_key, &self.credential, randomness),
+                .present::<zkcredential::credentials::StandardMode>(
+                    credential_key,
+                    &self.credential,
+                    randomness,
+                ),
         }
     }
 
@@ -537,14 +578,26 @@ impl AvatarUploadCredentialPresentation {
         current_time: Timestamp,
         server_params: &GenericServerSecretParams,
     ) -> Result<(), ZkGroupVerificationFailure> {
+        // The format change between V0 and V1 doesn't affect BackupAuthCredentials.
+        let verify_proof: &dyn Fn(zkcredential::presentation::PresentationProofVerifier) -> _ =
+            match server_params {
+                GenericServerSecretParams::V0(params) => {
+                    &|builder| builder.verify(&params.credential_key, &self.proof)
+                }
+                GenericServerSecretParams::V1(params) => {
+                    &|builder| builder.verify(&params.credential_key, &self.proof)
+                }
+            };
+
         // Check timestamp window: [-1 day, +2 days]
         check_avatar_upload_credential_redemption_time(self.redemption_time, current_time)?;
 
-        zkcredential::presentation::PresentationProofVerifier::new(CREDENTIAL_LABEL)
-            .add_public_attribute(&self.redemption_time)
-            .add_revealed_attribute(&self.cm)
-            .verify(&server_params.credential_key, &self.proof)
-            .map_err(|_| ZkGroupVerificationFailure)
+        verify_proof(
+            zkcredential::presentation::PresentationProofVerifier::new(CREDENTIAL_LABEL)
+                .add_public_attribute(&self.redemption_time)
+                .add_revealed_attribute(&self.cm),
+        )
+        .map_err(|_| ZkGroupVerificationFailure)
     }
 
     /// The Pedersen commitment `cm`, used as a stable unlinkable identifier.
@@ -568,7 +621,12 @@ impl AvatarUploadCredentialPresentation {
 
 #[cfg(test)]
 mod tests {
+    use test_case::test_case;
+
     use super::*;
+    use crate::generic_server_params::{
+        GenericServerSecretParamsLegacy, GenericServerSecretParamsStandard,
+    };
     use crate::{SECONDS_PER_DAY, Timestamp};
 
     const DAY_ALIGNED_TIMESTAMP: Timestamp = Timestamp::from_epoch_seconds(1681344000); // 2023-04-13 00:00:00 UTC
@@ -589,19 +647,23 @@ mod tests {
         zk_credential_key_pair().public_key()
     }
 
-    fn zk_credential_key_secret() -> Scalar {
-        zk_credential_key_pair().secret()
+    fn zk_credential_key_secrets() -> (Scalar, Scalar) {
+        zk_credential_key_pair().secrets()
     }
 
     fn server_secret_params() -> GenericServerSecretParams {
-        GenericServerSecretParams::generate(SERVER_SECRET_RAND)
+        GenericServerSecretParamsLegacy::generate(SERVER_SECRET_RAND).into()
     }
 
-    fn generate_credential(redemption_time: Timestamp) -> AvatarUploadCredential {
-        generate_credential_with_rotation_id(redemption_time, ROTATION_ID)
+    fn generate_credential(
+        server_params: &GenericServerSecretParams,
+        redemption_time: Timestamp,
+    ) -> AvatarUploadCredential {
+        generate_credential_with_rotation_id(server_params, redemption_time, ROTATION_ID)
     }
 
     fn generate_credential_with_rotation_id(
+        server_params: &GenericServerSecretParams,
         redemption_time: Timestamp,
         rotation_id: u64,
     ) -> AvatarUploadCredential {
@@ -620,12 +682,12 @@ mod tests {
                 &zk_credential_key_pub(),
                 rotation_id,
                 redemption_time,
-                &server_secret_params(),
+                server_params,
                 ISSUE_RAND,
             )
             .expect("issuance should succeed");
 
-        let server_public_params = server_secret_params().get_public_params();
+        let server_public_params = server_params.get_public_params();
         request_context
             .receive(response, &server_public_params, redemption_time)
             .expect("credential should be valid")
@@ -634,6 +696,7 @@ mod tests {
     /// Builds an in-flight request/response pair without consuming the request context, so tests
     /// can exercise `receive` with adversarial `current_time` values.
     fn issue_for_receive_test(
+        server_params: &GenericServerSecretParams,
         redemption_time: Timestamp,
     ) -> (
         AvatarUploadCredentialRequestContext,
@@ -653,21 +716,26 @@ mod tests {
                 &zk_credential_key_pub(),
                 ROTATION_ID,
                 redemption_time,
-                &server_secret_params(),
+                server_params,
                 ISSUE_RAND,
             )
             .expect("issuance should succeed");
         (request_context, response)
     }
 
-    #[test]
-    fn test_happy_path() {
-        let credential = generate_credential(DAY_ALIGNED_TIMESTAMP);
+    #[test_case(GenericServerSecretParamsLegacy::generate)]
+    #[test_case(GenericServerSecretParamsStandard::generate)]
+    fn test_happy_path<T>(generate_server_params: fn([u8; RANDOMNESS_LEN]) -> T)
+    where
+        T: Into<GenericServerSecretParams>,
+    {
+        let server_secret_params = generate_server_params(SERVER_SECRET_RAND).into();
+        let credential = generate_credential(&server_secret_params, DAY_ALIGNED_TIMESTAMP);
         let presentation =
-            credential.present(&server_secret_params().get_public_params(), PRESENT_RAND);
+            credential.present(&server_secret_params.get_public_params(), PRESENT_RAND);
 
         presentation
-            .verify(DAY_ALIGNED_TIMESTAMP, &server_secret_params())
+            .verify(DAY_ALIGNED_TIMESTAMP, &server_secret_params)
             .expect("presentation should be valid");
     }
 
@@ -682,18 +750,20 @@ mod tests {
         );
         let serialized = crate::serialize(&request_context);
 
-        let secret_bytes = zk_credential_key_secret().to_bytes();
-        assert!(
-            !serialized
-                .windows(secret_bytes.len())
-                .any(|window| window == secret_bytes),
-            "request context serialization should not contain the raw ZK credential key secret"
-        );
+        let (a1, a2) = zk_credential_key_secrets();
+        for secret_bytes in [a1.to_bytes(), a2.to_bytes()] {
+            assert!(
+                !serialized
+                    .windows(secret_bytes.len())
+                    .any(|window| window == secret_bytes),
+                "request context serialization should not contain a raw ZK credential key secret"
+            );
+        }
     }
 
     #[test]
     fn test_server_verify_expiration() {
-        let credential = generate_credential(DAY_ALIGNED_TIMESTAMP);
+        let credential = generate_credential(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         let presentation =
             credential.present(&server_secret_params().get_public_params(), PRESENT_RAND);
 
@@ -714,7 +784,7 @@ mod tests {
 
     #[test]
     fn test_server_verify_wrong_cm() {
-        let credential = generate_credential(DAY_ALIGNED_TIMESTAMP);
+        let credential = generate_credential(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         let valid_presentation =
             credential.present(&server_secret_params().get_public_params(), PRESENT_RAND);
 
@@ -731,7 +801,7 @@ mod tests {
 
     #[test]
     fn test_server_verify_wrong_redemption_time() {
-        let credential = generate_credential(DAY_ALIGNED_TIMESTAMP);
+        let credential = generate_credential(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         let valid_presentation =
             credential.present(&server_secret_params().get_public_params(), PRESENT_RAND);
 
@@ -816,7 +886,8 @@ mod tests {
             DAY_ALIGNED_TIMESTAMP.add_seconds(2 * SECONDS_PER_DAY),
         ];
         for current_time in current_times {
-            let (ctx, response) = issue_for_receive_test(DAY_ALIGNED_TIMESTAMP);
+            let (ctx, response) =
+                issue_for_receive_test(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
             ctx.receive(response, &server_public_params, current_time)
                 .expect("receive should succeed inside the redemption window");
         }
@@ -829,7 +900,8 @@ mod tests {
         let server_public_params = server_secret_params().get_public_params();
 
         // current_time more than 1 day before redemption_time => not yet usable.
-        let (ctx, response) = issue_for_receive_test(DAY_ALIGNED_TIMESTAMP);
+        let (ctx, response) =
+            issue_for_receive_test(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         assert!(
             ctx.receive(
                 response,
@@ -841,7 +913,8 @@ mod tests {
         );
 
         // current_time more than 2 days after redemption_time => already expired.
-        let (ctx, response) = issue_for_receive_test(DAY_ALIGNED_TIMESTAMP);
+        let (ctx, response) =
+            issue_for_receive_test(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         assert!(
             ctx.receive(
                 response,
@@ -867,7 +940,9 @@ mod tests {
         );
 
         let request = request_context.get_request();
-        let server_params = server_secret_params();
+        let GenericServerSecretParams::V0(server_params) = server_secret_params() else {
+            panic!("test should be using V0 params for now");
+        };
         let malicious = AvatarUploadCredentialResponse {
             reserved: Default::default(),
             redemption_time: DAY_ALIGNED_TIMESTAMP.add_seconds(3600),
@@ -894,7 +969,7 @@ mod tests {
 
     #[test]
     fn test_credential_exposes_redemption_time() {
-        let credential = generate_credential(DAY_ALIGNED_TIMESTAMP);
+        let credential = generate_credential(&server_secret_params(), DAY_ALIGNED_TIMESTAMP);
         assert_eq!(credential.redemption_time(), DAY_ALIGNED_TIMESTAMP);
     }
 
@@ -929,12 +1004,38 @@ mod tests {
     }
 
     #[test]
+    fn test_commitment_generators_are_pairwise_independent() {
+        // HNDL hiding requires the public-key generators (G_a1, G_a2) to be independent of the
+        // commitment blinding generators (H3, H4). This is a weak but cheap test to ensure
+        // that all generators are different at least.
+        let params = AvatarCommitmentParams::get_hardcoded();
+        let [G_a1, G_a2] = ZkCredentialKeyDomain::G_a();
+        let generators = [params.H1, params.H2, params.H3, params.H4, G_a1, G_a2];
+
+        for g in generators {
+            assert_ne!(
+                g,
+                RistrettoPoint::default(),
+                "generator must not be identity"
+            );
+        }
+        for (i, gi) in generators.iter().enumerate() {
+            for gj in &generators[i + 1..] {
+                assert_ne!(
+                    gi, gj,
+                    "commitment/key generators must be pairwise distinct"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_cm_deterministic() {
-        // Same (aci, zk_credential_key_secret, rotation_id) should produce the same Cm.
+        // Same (aci, (a1, a2), rotation_id) should produce the same Cm.
         let aci = libsignal_core::Aci::from(ACI);
         let aci_scalar = aci_to_scalar(aci);
-        let cm1 = compute_cm(aci_scalar, zk_credential_key_secret(), ROTATION_ID);
-        let cm2 = compute_cm(aci_scalar, zk_credential_key_secret(), ROTATION_ID);
+        let cm1 = compute_cm(aci_scalar, zk_credential_key_secrets(), ROTATION_ID);
+        let cm2 = compute_cm(aci_scalar, zk_credential_key_secrets(), ROTATION_ID);
         assert_eq!(cm1, cm2);
     }
 
@@ -942,8 +1043,16 @@ mod tests {
     fn test_cm_differs_for_different_aci() {
         let aci1 = libsignal_core::Aci::from(ACI);
         let aci2 = libsignal_core::Aci::from(uuid::uuid!("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
-        let cm1 = compute_cm(aci_to_scalar(aci1), zk_credential_key_secret(), ROTATION_ID);
-        let cm2 = compute_cm(aci_to_scalar(aci2), zk_credential_key_secret(), ROTATION_ID);
+        let cm1 = compute_cm(
+            aci_to_scalar(aci1),
+            zk_credential_key_secrets(),
+            ROTATION_ID,
+        );
+        let cm2 = compute_cm(
+            aci_to_scalar(aci2),
+            zk_credential_key_secrets(),
+            ROTATION_ID,
+        );
         assert_ne!(cm1, cm2);
     }
 
@@ -951,10 +1060,10 @@ mod tests {
     fn test_cm_differs_for_different_zk_credential_key() {
         let aci = libsignal_core::Aci::from(ACI);
         let aci_scalar = aci_to_scalar(aci);
-        let zkck1 = Scalar::from_bytes_mod_order([0x42; 32]);
-        let zkck2 = Scalar::from_bytes_mod_order([0x43; 32]);
-        let cm1 = compute_cm(aci_scalar, zkck1, ROTATION_ID);
-        let cm2 = compute_cm(aci_scalar, zkck2, ROTATION_ID);
+        let secrets1 = ZkCredentialKeyPair::generate(ZK_CRED_KEY_RAND).secrets();
+        let secrets2 = ZkCredentialKeyPair::generate(WRONG_ZK_CRED_KEY_RAND).secrets();
+        let cm1 = compute_cm(aci_scalar, secrets1, ROTATION_ID);
+        let cm2 = compute_cm(aci_scalar, secrets2, ROTATION_ID);
         assert_ne!(cm1, cm2);
     }
 
@@ -962,8 +1071,8 @@ mod tests {
     fn test_cm_differs_for_different_rotation_id() {
         let aci = libsignal_core::Aci::from(ACI);
         let aci_scalar = aci_to_scalar(aci);
-        let cm1 = compute_cm(aci_scalar, zk_credential_key_secret(), 1);
-        let cm2 = compute_cm(aci_scalar, zk_credential_key_secret(), 2);
+        let cm1 = compute_cm(aci_scalar, zk_credential_key_secrets(), 1);
+        let cm2 = compute_cm(aci_scalar, zk_credential_key_secrets(), 2);
         assert_ne!(cm1, cm2);
     }
 
@@ -971,7 +1080,7 @@ mod tests {
     fn test_issuance_wrong_rotation_id() {
         // Client commits to one rotation_id; server issues against a different one. The
         // well-formedness proof must fail, because the verifier strips the server's rotation_id and
-        // is left with a residual [delta]*H3.
+        // is left with a residual [delta]*H2.
         let aci = libsignal_core::Aci::from(ACI);
         let request_context = AvatarUploadCredentialRequestContext::new(
             aci,
@@ -998,8 +1107,10 @@ mod tests {
 
     #[test]
     fn test_different_rotation_id_produces_different_presentation_cm() {
-        let cred_v1 = generate_credential_with_rotation_id(DAY_ALIGNED_TIMESTAMP, 1);
-        let cred_v2 = generate_credential_with_rotation_id(DAY_ALIGNED_TIMESTAMP, 2);
+        let cred_v1 =
+            generate_credential_with_rotation_id(&server_secret_params(), DAY_ALIGNED_TIMESTAMP, 1);
+        let cred_v2 =
+            generate_credential_with_rotation_id(&server_secret_params(), DAY_ALIGNED_TIMESTAMP, 2);
         assert_ne!(cred_v1.cm(), cred_v2.cm());
 
         // Both should present and verify successfully.

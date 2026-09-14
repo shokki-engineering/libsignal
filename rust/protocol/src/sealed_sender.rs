@@ -8,8 +8,9 @@ use std::ops::Range;
 use std::sync::LazyLock;
 use std::time::SystemTime;
 
-use aes_gcm_siv::aead::generic_array::typenum::Unsigned;
-use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
+use aes_gcm_siv::aead::AeadInOut as _;
+use aes_gcm_siv::aead::array::typenum::Unsigned;
+use aes_gcm_siv::{Aes256GcmSiv, KeyInit};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use prost::Message;
@@ -18,6 +19,7 @@ use rand::{CryptoRng, Rng, TryRngCore as _};
 use subtle::{Choice, ConstantTimeEq};
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
+use crate::error::SessionNotFound;
 use crate::{
     Aci, CiphertextMessageType, DeviceId, Direction, IdentityKey, IdentityKeyPair,
     IdentityKeyStore, KeyPair, KyberPreKeyStore, PreKeySignalMessage, PreKeyStore, PrivateKey,
@@ -978,7 +980,12 @@ pub async fn sealed_sender_encrypt_from_usmc<R: Rng + CryptoRng>(
     let their_identity = identity_store
         .get_identity(destination)
         .await?
-        .ok_or_else(|| SignalProtocolError::SessionNotFound(destination.clone()))?;
+        .ok_or_else(|| {
+            SignalProtocolError::SessionNotFound(SessionNotFound::new(
+                destination.clone(),
+                "sealed_sender_encrypt_from_usmc",
+            ))
+        })?;
 
     let ephemeral = KeyPair::generate(rng);
 
@@ -1410,12 +1417,12 @@ where
     let ciphertext = {
         let mut ciphertext = usmc.serialized()?.to_vec();
         let symmetric_authentication_tag = Aes256GcmSiv::new(&keys.derive_k().into())
-            .encrypt_in_place_detached(
+            .encrypt_inout_detached(
                 // There's no nonce because the key is already one-use.
                 &aes_gcm_siv::Nonce::default(),
                 // And there's no associated data.
                 &[],
-                &mut ciphertext,
+                (&mut ciphertext[..]).into(),
             )
             .expect("AES-GCM-SIV encryption should not fail with a just-computed key");
         // AES-GCM-SIV expects the authentication tag to be at the end of the ciphertext
@@ -1450,7 +1457,10 @@ where
                         // Returned as a SessionNotFound error because (a) we don't have an identity
                         // error that includes the address, and (b) re-establishing the session should
                         // re-fetch the identity.
-                        SignalProtocolError::SessionNotFound(destination.clone())
+                        SignalProtocolError::SessionNotFound(SessionNotFound::new(
+                            destination.clone(),
+                            "sealed_sender_multi_recipient_encrypt_impl",
+                        ))
                     })?;
             identity_keys_and_ranges.push((their_identity, i..i + count));
         }
@@ -1777,9 +1787,8 @@ impl<'a> SealedSenderV2SentMessage<'a> {
     /// Returns the offset of `addr` within `self.full_message`, or `None` if `addr` does not lie
     /// within `self.full_message`.
     ///
-    /// A stripped-down version of [a dormant Rust RFC][subslice-offset].
-    ///
-    /// [subslice-offset]: https://github.com/rust-lang/rfcs/pull/2796
+    /// TODO: replace with slice::element_offset at MSRV 1.94. That API doesn't accept
+    /// "one-past-the-end" addresses, but we don't make use of that anyway in either caller.
     #[inline]
     fn offset_within_full_message(&self, addr: *const u8) -> Option<usize> {
         // Arithmetic on addresses is valid for offsets within a byte array.
@@ -2072,7 +2081,7 @@ pub async fn sealed_sender_decrypt(
         msg_type => {
             return Err(SignalProtocolError::InvalidMessage(
                 msg_type,
-                "unexpected message type for sealed_sender_decrypt",
+                format!("unexpected message type for sealed_sender_decrypt: {msg_type:?}"),
             ));
         }
     };

@@ -1,7 +1,5 @@
-v0.94.4
+v0.102.2
 
-- Internal: libsignal now uses Android Gradle Plugin 9.1.1
-
-- zkgroup: Add AvatarUploadCredential, an anonymous credential used to rate-limit avatar uploads.
-
-- Several new requests have been added to UnauthBackupsService; however, they are only usable when an H2 connection is guaranteed, and should not be adopted otherwise.
+- SVR: Update production SVRB/SVR2 to use 2026Q3.
+- Backups: Validate the new sharedName field on Contact and the new aci, nickname, and note fields on ContactAttachment.
+- Backups: Validate the new sharedName option in LearnedProfileChatUpdate.previousName.

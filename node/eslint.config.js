@@ -76,8 +76,6 @@ const config = defineConfig(
       ],
       '@typescript-eslint/no-non-null-assertion': 'error',
 
-      '@typescript-eslint/no-redeclare': 'error',
-
       '@typescript-eslint/no-shadow': [
         'error',
         {
@@ -101,19 +99,31 @@ const config = defineConfig(
       ],
 
       'import/prefer-default-export': 'off',
+      'import/consistent-type-specifier-style': ['error', 'prefer-top-level'],
       'import/enforce-node-protocol-usage': ['error', 'always'],
+      'import/no-cycle': 'error',
       'import/no-extraneous-dependencies': [
         'error',
         {
           devDependencies: ['ts/test/**'],
         },
       ],
+
       'prefer-template': 'error',
+
       '@typescript-eslint/no-require-imports': 'error',
       '@typescript-eslint/consistent-type-assertions': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/method-signature-style': 'error',
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          // Needed to catch chai-as-promised expectations too.
+          checkThenables: true,
+        },
+      ],
+
       'jsdoc/check-access': 'error',
       'jsdoc/check-alignment': 'error',
       'jsdoc/check-line-alignment': 'error',

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+use indexmap::IndexSet;
 use itertools::Itertools as _;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, TokenStreamExt, format_ident, quote};
@@ -157,11 +158,12 @@ pub(crate) fn nice_metadata(
 /// {}
 /// ```
 pub(crate) struct Impl {
-    pub(crate) item_name: Ident,
+    pub(crate) target: Path,
     pub(crate) trait_name: Option<Path>,
     pub(crate) generics: Generics,
-    pub(crate) extra_where: Vec<WherePredicate>,
+    pub(crate) extra_where: IndexSet<WherePredicate>,
     pub(crate) extra_params: Vec<GenericParam>,
+    pub(crate) unsafe_: Option<Token![unsafe]>,
 }
 
 impl ToTokens for Impl {
@@ -173,12 +175,13 @@ impl ToTokens for Impl {
             .extend(self.extra_where.iter().cloned());
         g.params.extend(self.extra_params.iter().cloned());
         let (impl_, _, where_) = g.split_for_impl();
-        let item_name = &self.item_name;
+        let target = &self.target;
         let trait_name = self
             .trait_name
             .as_ref()
             .map(|trait_name| quote!(#trait_name for));
-        tokens.append_all(quote!(impl #impl_ #trait_name #item_name #item_generics #where_));
+        let unsafe_ = &self.unsafe_;
+        tokens.append_all(quote!(#unsafe_ impl #impl_ #trait_name #target #item_generics #where_));
     }
 }
 
@@ -186,14 +189,18 @@ impl Impl {
     /// Generate an `Impl` for `impl #trait_name for #value`
     ///
     /// From this baseline, we can add extra generic parameters and add to the where clause
-    pub(crate) fn new(value: &DeriveInput, trait_name: Option<Path>) -> Self {
+    pub(crate) fn new(value: &DeriveInput, target: &Path, trait_name: Option<Path>) -> Self {
         Self {
-            item_name: value.ident.clone(),
+            target: target.clone(),
             trait_name,
             generics: value.generics.clone(),
-            extra_where: Vec::new(),
+            extra_where: IndexSet::new(),
             extra_params: Vec::new(),
+            unsafe_: None,
         }
+    }
+    pub(crate) fn mark_unsafe(&mut self) {
+        self.unsafe_ = Some(parse_quote!(unsafe));
     }
 }
 
@@ -208,14 +215,14 @@ pub(crate) fn nice_struct_metadata(
     fields: &Fields,
     trait_name: &Path,
     trait_fn: &Ident,
-    where_clause: &mut Vec<WherePredicate>,
+    where_clause: &mut IndexSet<WherePredicate>,
 ) -> TokenStream2 {
     let is_tuple = matches!(fields, Fields::Unnamed(_) | Fields::Unit);
     let krate = crates::libsignal_bridge_types();
     let field_names = get_field_names(fields);
     let field_types = fields.iter().map(|field| &field.ty).collect_vec();
     for ty in &field_types {
-        where_clause.push(parse_quote!(#ty: #trait_name));
+        where_clause.insert(parse_quote!(#ty: #trait_name));
     }
     quote! {
         #krate::metadata::Struct {
@@ -233,7 +240,7 @@ pub(crate) fn nice_struct_metadata(
 /// What are fields named?
 ///
 /// For tuple structs, fields are named like: `_0`, `_1`, ...
-fn get_field_names(fields: &Fields) -> Vec<Ident> {
+pub fn get_field_names(fields: &Fields) -> Vec<Ident> {
     fields
         .iter()
         .enumerate()
@@ -271,9 +278,8 @@ pub(crate) struct DeriveInputInfo {
     /// For each variant, what's its name
     pub(crate) variant_names: Vec<Ident>,
 }
-impl From<&DeriveInput> for DeriveInputInfo {
-    fn from(input: &DeriveInput) -> Self {
-        let ident = &input.ident;
+impl DeriveInputInfo {
+    pub fn new(input: &DeriveInput, target: &syn::Path) -> Self {
         // The pattern needed to match against this variant
         let mut patterns = Vec::new();
         let mut variant_indices = Vec::new();
@@ -284,17 +290,17 @@ impl From<&DeriveInput> for DeriveInputInfo {
         match &input.data {
             Data::Struct(data) => {
                 let ef = extract_fields_pattern(&data.fields);
-                patterns.push(quote!(#ident #ef));
+                patterns.push(quote!(#target #ef));
                 field_names.push(get_field_names(&data.fields));
                 variant_indices.push(0);
                 field_types.push(data.fields.iter().map(|field| field.ty.clone()).collect());
-                variant_names.push(ident.clone());
+                variant_names.push(input.ident.clone());
             }
             Data::Enum(data) => {
                 for (i, variant) in data.variants.iter().enumerate() {
                     let ef = extract_fields_pattern(&variant.fields);
                     let variant_name = &variant.ident;
-                    patterns.push(quote!(#ident::#variant_name #ef));
+                    patterns.push(quote!(#target::#variant_name #ef));
                     variant_indices.push(i32::try_from(i).expect("not too many variants"));
                     field_names.push(get_field_names(&variant.fields));
                     field_types.push(
@@ -348,9 +354,15 @@ pub(crate) fn nice_type_metadata(
     metadata_field: &Ident,
     trait_name: &Path,
     trait_fn: &Ident,
-    where_clause: &mut Vec<WherePredicate>,
+    where_clause: &mut IndexSet<WherePredicate>,
+    nice_type: Option<&str>,
 ) -> syn::Result<TokenStream2> {
     let krate = crates::libsignal_bridge_types();
+    let nice_type = if let Some(x) = nice_type {
+        quote!(Some(#x.to_string()))
+    } else {
+        quote!(None)
+    };
     let ident = &input.ident;
     Ok(match &input.data {
         Data::Struct(data) => {
@@ -360,7 +372,10 @@ pub(crate) fn nice_type_metadata(
                 #krate::metadata::insert_checked(
                     &mut #ctx.#metadata_field,
                     stringify!(#ident).to_string(),
-                    ns.into(),
+                    #krate::metadata::DerivedType {
+                        nice_type: #nice_type,
+                        body: ns.into()
+                    },
                 );
             }
         }
@@ -377,12 +392,58 @@ pub(crate) fn nice_type_metadata(
                 #krate::metadata::insert_checked(
                     &mut #ctx.#metadata_field,
                     stringify!(#ident).into(),
-                    #krate::metadata::Enum {
-                        variants,
-                    }.into(),
+                    #krate::metadata::DerivedType {
+                        nice_type: #nice_type,
+                        body: #krate::metadata::Enum {
+                            variants,
+                        }.into(),
+                    },
                 );
             }
         }
         Data::Union(_) => unreachable!("checked earlier"),
     })
+}
+
+/// Because the arg impl requires intermediate storage, we introduce the ArgStoredType.
+///
+/// For structs, it looks like:
+/// `enum Foo<T> { Foo(T) }`
+/// For enums, it looks like:
+/// `enum Foo<A, B, ...> { A(A), B(B), ... }`
+///
+/// We need a custom type because:
+/// 1. For enums, the intermediate data is distinct for each variant
+/// 2. We could avoid declaring a fresh type, and just use nested Eithers, but that'd be more
+///    annoying than just declaring this type.
+///
+/// We use one generic type per variant (each containing a tuple), because it's easier to work
+/// with in our macros than it'd be to have one generic type for each field.
+pub(crate) fn arg_type_info_storage_decl(
+    name: &Ident,
+    input: &DeriveInput,
+    target: &syn::Path,
+) -> TokenStream2 {
+    let DeriveInputInfo { variant_names, .. } = DeriveInputInfo::new(input, target);
+    quote! {
+        #[doc(hidden)]
+        #[allow(unused)]
+        pub enum #name<#(#variant_names),*> {
+            #(#variant_names(#variant_names)),*
+        }
+    }
+}
+
+pub(crate) struct BridgeAsValueOptions {
+    pub arg: bool,
+    pub result: bool,
+}
+
+impl Default for BridgeAsValueOptions {
+    fn default() -> Self {
+        Self {
+            arg: true,
+            result: true,
+        }
+    }
 }

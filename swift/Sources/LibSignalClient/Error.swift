@@ -79,7 +79,21 @@ public enum SignalError: Error {
     case requestUnauthorized(String)
     case mismatchedDevices(entries: [MismatchedDeviceEntry], message: String)
     case serviceIdNotFound(String)
+    case deviceIdNotFound(String)
     case uploadTooLarge(String)
+    case usernameNotAvailable(String)
+    case usernameNotSet(String)
+    case usernameReservationNotFound(String)
+    case invalidReceipt(String)
+    case missingBackupId(String)
+    case ReceiptCredentialErrorPaymentStillProcessing(String)
+    case ReceiptCredentialErrorPaymentRequired(chargeFailure: ChargeFailure?, message: String)
+    case ReceiptCredentialErrorPaymentNotFound(String)
+    case ReceiptCredentialErrorReceiptAlreadyIssued(String)
+    case tooManyTotpKeys(String)
+    case tooManyMfaKeys(String)
+    case oneTimePasswordNotVerified(String)
+    case mfaKeyNotFound(String)
 
     case unknown(UInt32, String)
 }
@@ -310,17 +324,28 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         throw RegistrationError.deviceTransferPossible(errStr)
     case SignalErrorCodeRegistrationRecoveryVerificationFailed:
         throw RegistrationError.recoveryVerificationFailed(errStr)
+    case SignalErrorCodeRegisterAccountRequestRejected:
+        throw RegistrationError.registerAccountRequestRejected(errStr)
+    case SignalErrorCodeRegistrationInvalidSession:
+        throw RegistrationError.invalidSession(errStr)
+    case SignalErrorCodeRegistrationInvalidReceipt:
+        throw RegistrationError.invalidReceipt(errStr)
+    case SignalErrorCodeRegistrationRecoveryPasswordRequired:
+        throw RegistrationError.recoveryPasswordRequired(errStr)
+    case SignalErrorCodeRegistrationOneTimePasswordRequired:
+        throw RegistrationError.oneTimePasswordRequired(errStr)
     case SignalErrorCodeRegistrationLock:
         var timeRemaining: UInt64 = 0
-        var svr2Password = ""
-        let svr2Username = try invokeFnReturningString { svr2Username in
-            var bridgedPassword: UnsafePointer<CChar>? = nil
-            let err = signal_error_get_registration_lock(&timeRemaining, svr2Username, &bridgedPassword, error)
-            if err == nil {
-                svr2Password = String(cString: bridgedPassword!)
-                signal_free_string(bridgedPassword)
-            }
-            return err
+        var credentials = SignalPairOfCStringPtrCStringPtr()
+        try checkError(signal_error_get_registration_lock(&timeRemaining, &credentials, error))
+        // Despite the type, username and password are either both present or both absent
+        let svr2Username = credentials.first.map { username in
+            defer { signal_free_string(username) }
+            return String(cString: username)
+        }
+        let svr2Password = credentials.second.map { password in
+            defer { signal_free_string(password) }
+            return String(cString: password)
         }
 
         throw RegistrationError.registrationLock(
@@ -344,8 +369,40 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
         )
     case SignalErrorCodeServiceIdNotFound:
         throw SignalError.serviceIdNotFound(errStr)
+    case SignalErrorCodeDeviceIdNotFound:
+        throw SignalError.deviceIdNotFound(errStr)
     case SignalErrorCodeUploadTooLarge:
         throw SignalError.uploadTooLarge(errStr)
+    case SignalErrorCodeUsernameNotAvailable:
+        throw SignalError.usernameNotAvailable(errStr)
+    case SignalErrorCodeUsernameNotSet:
+        throw SignalError.usernameNotSet(errStr)
+    case SignalErrorCodeUsernameReservationNotFound:
+        throw SignalError.usernameReservationNotFound(errStr)
+    case SignalErrorCodeInvalidReceipt:
+        throw SignalError.invalidReceipt(errStr)
+    case SignalErrorCodeMissingBackupId:
+        throw SignalError.missingBackupId(errStr)
+    case SignalErrorCodeReceiptCredentialErrorPaymentStillProcessing:
+        throw SignalError.ReceiptCredentialErrorPaymentStillProcessing(errStr)
+    case SignalErrorCodeReceiptCredentialErrorPaymentRequired:
+        let chargeFailure = try NativeNice.Error_GetChargeFailure(err: error)
+        throw SignalError.ReceiptCredentialErrorPaymentRequired(
+            chargeFailure: chargeFailure,
+            message: errStr
+        )
+    case SignalErrorCodeReceiptCredentialErrorPaymentNotFound:
+        throw SignalError.ReceiptCredentialErrorPaymentNotFound(errStr)
+    case SignalErrorCodeReceiptCredentialErrorReceiptAlreadyIssued:
+        throw SignalError.ReceiptCredentialErrorReceiptAlreadyIssued(errStr)
+    case SignalErrorCodeTooManyTotpKeys:
+        throw SignalError.tooManyTotpKeys(errStr)
+    case SignalErrorCodeTooManyMfaKeys:
+        throw SignalError.tooManyMfaKeys(errStr)
+    case SignalErrorCodeOneTimePasswordNotVerified:
+        throw SignalError.oneTimePasswordNotVerified(errStr)
+    case SignalErrorCodeMfaKeyNotFound:
+        throw SignalError.mfaKeyNotFound(errStr)
     default:
         throw SignalError.unknown(errType, errStr)
     }

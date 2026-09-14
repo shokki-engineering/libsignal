@@ -19,18 +19,39 @@ import {
   ProvisioningConnection,
   ProvisioningConnectionListener,
 } from './net/Chat.js';
-import { RegistrationService } from './net/Registration.js';
+import {
+  RegisterAccountResponse,
+  RegisterAccountWithoutNumberArgs,
+  RegistrationService,
+  ReregisterAccountArgs,
+  ReregisterAccountWithoutNumberArgs,
+} from './net/Registration.js';
+import { Svr2 } from './net/Svr2.js';
 import { SvrB } from './net/SvrB.js';
 import { BridgedStringMap, newNativeHandle } from './internal.js';
 export * from './net/CDSI.js';
 export * from './net/Chat.js';
+
+export * from './net/chat/AuthAccountsService.js';
+export * from './net/chat/AuthBackupsService.js';
+export * from './net/chat/AuthDevicesService.js';
+export * from './net/chat/AuthKeysService.js';
 export * from './net/chat/AuthMessagesService.js';
+export * from './net/chat/AuthPaymentsService.js';
+export * from './net/chat/AuthStickersService.js';
+export * from './net/chat/AuthUsernamesService.js';
 export * from './net/chat/UnauthBackupsService.js';
+export * from './net/chat/UnauthCallQualityService.js';
+export * from './net/chat/UnauthCredentialsService.js';
 export * from './net/chat/UnauthKeysService.js';
+export * from './net/chat/UnauthLoginPurchaseService.js';
+
 export * from './net/chat/UnauthMessagesService.js';
 export * from './net/chat/UnauthProfilesService.js';
 export * from './net/chat/UnauthUsernamesService.js';
+
 export * from './net/Registration.js';
+export * from './net/Svr2.js';
 export * from './net/SvrB.js';
 
 // This must match the libsignal-bridge Rust enum of the same name.
@@ -317,6 +338,65 @@ export class Net {
   }
 
   /**
+   * Re-registers an account that has a phone number.
+   *
+   * Uses the account's recovery password to authenticate instead of a
+   * verification session, so there is no session to create or resume.
+   */
+  public async reregisterAccount(
+    args: Readonly<ReregisterAccountArgs>
+  ): Promise<RegisterAccountResponse> {
+    return RegistrationService.reregisterAccount(
+      {
+        connectionManager: this._connectionManager,
+        tokioAsyncContext: this.asyncContext,
+      },
+      args
+    );
+  }
+
+  /**
+   * Registers a new account that has no phone number.
+   *
+   * No PNI keys are accepted here, since the account has no phone number to
+   * associate them with.
+   *
+   * `accountAttributes.recoveryPassword` must not be empty: a recovery
+   * password is the only way an account with no phone number can ever be
+   * recovered.
+   */
+  public async registerAccountWithoutNumber(
+    args: Readonly<RegisterAccountWithoutNumberArgs>
+  ): Promise<RegisterAccountResponse> {
+    return RegistrationService.registerAccountWithoutNumber(
+      {
+        connectionManager: this._connectionManager,
+        tokioAsyncContext: this.asyncContext,
+      },
+      args
+    );
+  }
+
+  /**
+   * Re-registers an account that has no phone number, identified by its ACI.
+   *
+   * The counterpart to {@link Net.reregisterAccount} for an account with no
+   * phone number. No PNI keys are accepted here; libsignal generates the PNI
+   * material the server requires and then discards.
+   */
+  public async reregisterAccountWithoutNumber(
+    args: Readonly<ReregisterAccountWithoutNumberArgs>
+  ): Promise<RegisterAccountResponse> {
+    return RegistrationService.reregisterAccountWithoutNumber(
+      {
+        connectionManager: this._connectionManager,
+        tokioAsyncContext: this.asyncContext,
+      },
+      args
+    );
+  }
+
+  /**
    * Enables/disables IPv6 for all new connections (until changed).
    *
    * The flag is `true` by default.
@@ -587,5 +667,22 @@ export class Net {
       ? Environment.Staging
       : this.options.env;
     return new SvrB(this.asyncContext, this._connectionManager, auth, env);
+  }
+
+  /**
+   * Returns an SVR2 service instance for this network configuration.
+   *
+   * SVR2 stores a small piece of data protected by a pin in a secure enclave.
+   * See {@link Svr2} for the storage and restore protocols.
+   *
+   * @param auth The authentication credentials to use when connecting to the SVR2 server.
+   * @returns An Svr2 service instance configured for this network environment.
+   * @see {@link Svr2}
+   */
+  svr2(auth: Readonly<ServiceAuth>): Svr2 {
+    const env = this.options.localTestServer
+      ? Environment.Staging
+      : this.options.env;
+    return new Svr2(this.asyncContext, this._connectionManager, auth, env);
   }
 }

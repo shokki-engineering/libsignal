@@ -20,9 +20,12 @@ internal protocol NiceArgConverter {
 }
 
 extension NiceArgConverter {
-    static func convertArgBorrowed<Result>(_ arg: NiceArg, _ thunk: (FfiArg) throws -> Result) rethrows -> Result {
+    static internal func genericArgBorrowed<Result>(
+        _ arg: NiceArg,
+        _ thunk: (FfiArg) throws -> Result
+    ) rethrows -> Result {
         return try withExtendedLifetime(arg) {
-            let (ffi, ka) = self.convertArg(arg)
+            let (ffi, ka) = convertArg(arg)
             return try withExtendedLifetime(ka) {
                 return try thunk(ffi)
             }
@@ -85,19 +88,19 @@ internal struct DataConverter: NiceArgConverter, NiceReturnConverter {
 
 internal struct StringConverter: NiceArgConverter, NiceReturnConverter {
     typealias NiceArg = String
-    typealias FfiArg = UnsafePointer<CChar>
+    typealias FfiArg = UnsafePointer<CChar>?
     typealias KeepAlive = NSString
     typealias FfiReturn = UnsafePointer<CChar>?
     typealias NiceReturn = String
 
-    static func convertArg(_ arg: String) -> (UnsafePointer<CChar>, NSString?) {
+    static func convertArg(_ arg: String) -> (UnsafePointer<CChar>?, NSString?) {
         let nsstring = arg as NSString
-        return (nsstring.utf8String!, nsstring)
+        return (nsstring.utf8String, nsstring)
     }
 
     static func convertArgBorrowed<Result>(
         _ arg: String,
-        _ thunk: (UnsafePointer<CChar>) throws -> Result
+        _ thunk: (UnsafePointer<CChar>?) throws -> Result
     ) rethrows -> Result {
         return try arg.withCString(thunk)
     }
@@ -109,6 +112,43 @@ internal struct StringConverter: NiceArgConverter, NiceReturnConverter {
     static func convertReturn(consuming value: FfiReturn) throws -> NiceReturn {
         guard let value = value else {
             throw SignalError.invalidArgument("null CString")
+        }
+        defer { signal_free_string(value) }
+        return String(cString: value)
+    }
+}
+
+internal struct OptionalStringConverter: NiceReturnConverter, NiceArgConverter {
+    typealias NiceArg = String?
+    typealias FfiArg = UnsafePointer<CChar>?
+    typealias KeepAlive = StringConverter.KeepAlive
+
+    static func convertArg(_ arg: NiceArg) -> (FfiArg, KeepAlive?) {
+        if let arg = arg {
+            return StringConverter.convertArg(arg)
+        } else {
+            return (nil, nil)
+        }
+    }
+
+    static func convertArgBorrowed<Result>(_ arg: NiceArg, _ thunk: (FfiArg) throws -> Result) rethrows -> Result {
+        if let arg = arg {
+            return try StringConverter.convertArgBorrowed(arg, thunk)
+        } else {
+            return try thunk(nil)
+        }
+    }
+
+    typealias FfiReturn = UnsafePointer<CChar>?
+    typealias NiceReturn = String?
+
+    static func emptyFfiReturn() -> UnsafePointer<CChar>? {
+        nil
+    }
+
+    static func convertReturn(consuming value: FfiReturn) throws -> NiceReturn {
+        guard let value = value else {
+            return nil
         }
         defer { signal_free_string(value) }
         return String(cString: value)
@@ -127,21 +167,11 @@ extension Int16: DefaultInit {}
 extension UInt16: DefaultInit {}
 extension Int8: DefaultInit {}
 extension UInt8: DefaultInit {}
+extension Float: DefaultInit {}
 
-internal struct IdentityConverter<T: DefaultInit>: NiceArgConverter, NiceReturnConverter {
-    typealias NiceArg = T
-    typealias FfiArg = T
-    typealias KeepAlive = ()
+internal enum IdentityResultConverter<T: DefaultInit>: NiceReturnConverter {
     typealias NiceReturn = T
     typealias FfiReturn = T
-
-    static func convertArg(_ arg: T) -> (T, ()?) {
-        (arg, nil)
-    }
-
-    static func convertArgBorrowed<Result>(_ arg: T, _ thunk: (T) throws -> Result) rethrows -> Result {
-        return try thunk(arg)
-    }
 
     static func emptyFfiReturn() -> T {
         return T()
@@ -149,6 +179,19 @@ internal struct IdentityConverter<T: DefaultInit>: NiceArgConverter, NiceReturnC
 
     static func convertReturn(consuming value: T) throws -> T {
         return value
+    }
+}
+internal enum IdentityArgConverter<T>: NiceArgConverter {
+    typealias NiceArg = T
+    typealias FfiArg = T
+    typealias KeepAlive = ()
+
+    static func convertArg(_ arg: T) -> (T, ()?) {
+        (arg, nil)
+    }
+
+    static func convertArgBorrowed<Result>(_ arg: T, _ thunk: (T) throws -> Result) rethrows -> Result {
+        return try thunk(arg)
     }
 }
 
@@ -195,10 +238,31 @@ internal struct BridgeHandleRefConverter<Ptr: SignalMutPointer, T: NativeHandleO
     }
 }
 
-internal struct ByteArrayConverter<T: ByteArray>: NiceArgConverter {
+internal struct BridgeHandleConverter<Ptr: SignalMutPointer, T: NativeHandleOwner<Ptr>>: NiceReturnConverter {
+    typealias NiceReturn = T
+    typealias FfiReturn = Ptr
+    static func emptyFfiReturn() -> Ptr {
+        Ptr(untyped: nil)
+    }
+    static func convertReturn(consuming value: Ptr) throws -> T {
+        return T(owned: NonNull(value)!)
+    }
+}
+
+internal struct ByteArrayConverter<T: ByteArray>: NiceArgConverter, NiceReturnConverter {
+    typealias NiceReturn = T
+    typealias FfiReturn = SignalOwnedBuffer
     typealias NiceArg = T
     typealias FfiArg = SignalBorrowedBuffer
     typealias KeepAlive = NSData
+
+    static func emptyFfiReturn() -> SignalOwnedBuffer {
+        SignalOwnedBuffer()
+    }
+    static func convertReturn(consuming value: SignalOwnedBuffer) throws -> T {
+        let data = try DataConverter.convertReturn(consuming: value)
+        return try T(contents: data)
+    }
 
     static func convertArg(_ arg: T) -> (FfiArg, KeepAlive?) {
         return DataConverter.convertArg(arg.serialize())
@@ -208,6 +272,201 @@ internal struct ByteArrayConverter<T: ByteArray>: NiceArgConverter {
         _ thunk: (SignalBorrowedBuffer) throws -> Result
     ) rethrows -> Result {
         try arg.serialize().withBorrowed(thunk)
+    }
+}
+
+internal enum FixedLengthSerializedConverter<T: ByteArray, Helper: FixedByteArrayHelper>: NiceArgConverter {
+    typealias NiceArg = T
+    typealias FfiArg = UnsafePointer<Helper.Ffi>?
+    typealias KeepAlive = NSData
+
+    static func convertArg(_ arg: T) -> (FfiArg, KeepAlive?) {
+        return FixedByteArrayConverter<Helper>.convertArg(arg.serialize())
+    }
+    static func convertArgBorrowed<Result>(
+        _ arg: T,
+        _ thunk: (FfiArg) throws -> Result
+    ) rethrows -> Result {
+        try FixedByteArrayConverter<Helper>.convertArgBorrowed(arg.serialize(), thunk)
+    }
+}
+
+internal struct ErrorConverter: NiceReturnConverter {
+    typealias NiceReturn = Error
+    typealias FfiReturn = SignalFfiErrorRef?
+    static func emptyFfiReturn() -> SignalFfiErrorRef? {
+        nil
+    }
+    static func convertReturn(consuming value: SignalFfiErrorRef?) throws -> Error {
+        convertError(value)!
+    }
+}
+
+internal struct OptionalErrorConverter: NiceReturnConverter {
+    typealias NiceReturn = Error?
+    typealias FfiReturn = SignalFfiErrorRef?
+    static func emptyFfiReturn() -> SignalFfiErrorRef? {
+        nil
+    }
+    static func convertReturn(consuming value: SignalFfiErrorRef?) throws -> Error? {
+        convertError(value)
+    }
+}
+
+internal struct BulkPolledStreamTerminationConverter: NiceReturnConverter {
+    // The real MAP_FAILED constant lives in the C stdlib (Darwin, or Glibc for Linux testing)
+    // as a macro, so it's already part of the C library's ABI.
+    // But the Swift distribution shadows the macro to make sure it has a consistent type,
+    // and a side effect of that means it ends up being an opaque value.
+    // By redefining it here, we can inline it into the convert function.
+    static let MAP_FAILED_BIT_PATTERN: Int = -1
+
+    typealias NiceReturn = BulkPolledStreamTermination?
+    typealias FfiReturn = SignalFfiBulkPolledStreamTerminationReason
+    static func emptyFfiReturn() -> SignalFfiBulkPolledStreamTerminationReason {
+        .init()
+    }
+    static func convertReturn(
+        consuming value: SignalFfiBulkPolledStreamTerminationReason
+    ) throws -> BulkPolledStreamTermination? {
+        switch Int(bitPattern: value.raw) {
+        case 0: nil
+        case MAP_FAILED_BIT_PATTERN: .finished
+        default: .error(try ErrorConverter.convertReturn(consuming: value.raw))
+        }
+    }
+}
+
+internal class StablePointerArray<Element> {
+    internal let buffer: UnsafeMutableBufferPointer<Element>
+    internal init(fromContentsOf elements: [Element]) {
+        self.buffer = UnsafeMutableBufferPointer.allocate(capacity: elements.count)
+        // initialize returns the index at the end of the buffer. We don't need it.
+        _ = self.buffer.initialize(fromContentsOf: elements)
+    }
+    deinit {
+        self.buffer.deinitialize()
+        self.buffer.deallocate()
+    }
+}
+
+internal protocol SignalBorrowedSliceOf {
+    associatedtype Element
+    init()
+    init(
+        generic_base: UnsafePointer<Element>?,
+        generic_length: Int
+    )
+    var generic_base: UnsafePointer<Element>? { get set }
+    var generic_length: Int { get set }
+}
+
+extension SignalBorrowedSliceOf {
+    init(unsafeBufferPointer: UnsafeBufferPointer<Element>) {
+        self.init(generic_base: unsafeBufferPointer.baseAddress, generic_length: unsafeBufferPointer.count)
+    }
+}
+
+internal enum ArrayArgConverter<Converter: NiceArgConverter, BorrowedSlice: SignalBorrowedSliceOf>: NiceArgConverter
+where BorrowedSlice.Element == Converter.FfiArg {
+    typealias NiceArg = [Converter.NiceArg]
+    typealias FfiArg = BorrowedSlice
+    typealias KeepAlive = (StablePointerArray<Converter.FfiArg>, [Converter.KeepAlive])
+
+    private static func convertArgCore(_ arg: [Converter.NiceArg]) -> ([Converter.FfiArg], [Converter.KeepAlive]) {
+        var keepAlives: [Converter.KeepAlive] = []
+        var contents: [Converter.FfiArg] = []
+        contents.reserveCapacity(arg.count)
+        // We don't reserve capacity for keepAlives, since we might not add to it for many types
+        for item in arg {
+            let (ffi, ka) = Converter.convertArg(item)
+            contents.append(ffi)
+            if let ka = ka {
+                keepAlives.append(ka)
+            }
+        }
+        return (contents, keepAlives)
+    }
+
+    static func convertArgBorrowed<Result>(
+        _ arg: [Converter.NiceArg],
+        _ thunk: (FfiArg) throws -> Result
+    ) rethrows -> Result {
+        let (contents, keepAlives) = convertArgCore(arg)
+        return try withExtendedLifetime(keepAlives) {
+            try contents.withUnsafeBufferPointer { buf in
+                try thunk(BorrowedSlice(unsafeBufferPointer: buf))
+            }
+        }
+    }
+
+    static func convertArg(_ arg: NiceArg) -> (FfiArg, KeepAlive?) {
+        let (contents, keepAlives) = convertArgCore(arg)
+        let contentsStable = StablePointerArray(fromContentsOf: contents)
+        return (
+            BorrowedSlice(unsafeBufferPointer: UnsafeBufferPointer(contentsStable.buffer)),
+            (contentsStable, keepAlives)
+        )
+    }
+}
+
+internal protocol SignalOwnedBufferOfMaxAligned {
+    associatedtype Element
+    init()
+    init(
+        generic_base: UnsafeMutablePointer<Element>?,
+        generic_length: Int,
+        generic_size_bytes: Int,
+    )
+    var generic_base: UnsafeMutablePointer<Element>? { get set }
+    var generic_length: Int { get set }
+    var generic_size_bytes: Int { get set }
+}
+
+extension SignalOwnedBufferOfMaxAligned {
+    func typeErased() -> SignalOwnedBufferOfMaxAlignedErased {
+        SignalOwnedBufferOfMaxAlignedErased(
+            base: UnsafeMutableRawPointer(self.generic_base),
+            length: self.generic_length,
+            size_bytes: self.generic_size_bytes,
+        )
+    }
+    func buffer() -> UnsafeBufferPointer<Element> {
+        UnsafeBufferPointer(start: self.generic_base, count: self.generic_length)
+    }
+}
+
+internal enum ArrayReturnConverter<Converter: NiceReturnConverter, Buffer: SignalOwnedBufferOfMaxAligned>:
+    NiceReturnConverter
+where Buffer.Element == Converter.FfiReturn {
+    typealias NiceReturn = [Converter.NiceReturn]
+    typealias FfiReturn = Buffer
+
+    static func emptyFfiReturn() -> FfiReturn {
+        Buffer()
+    }
+
+    static func convertReturn(consuming value: FfiReturn) throws -> NiceReturn {
+        defer {
+            SignalFfi.signal_free_owned_buffer_of_max_aligned(value.typeErased())
+        }
+        let buffer = value.buffer()
+        var out: NiceReturn = []
+        out.reserveCapacity(buffer.count)
+        var err: (any Error)? = nil
+        for x in buffer {
+            // We want to consume all return values, even if there's an intermediate failure, to
+            // avoid leaking memory.
+            do {
+                out.append(try Converter.convertReturn(consuming: x))
+            } catch {
+                err = error
+            }
+        }
+        if let err = err {
+            throw err
+        }
+        return out
     }
 }
 
@@ -246,18 +505,210 @@ internal struct BackupCdnCredentialsConverter: NiceReturnConverter {
     }
 }
 
-// swiftlint:disable:next todo
-// TODO: Get to the point where we can make this generic.
-internal struct PairOfStringConverterAndStringConverter: NiceReturnConverter {
-    typealias NiceReturn = (String, String)
-    typealias FfiReturn = SignalPairOfCStringPtrCStringPtr
+internal protocol SignalPairOf {
+    associatedtype First
+    associatedtype Second
+    init()
+    init(generic_first: First, generic_second: Second)
+    var generic_first: First { get set }
+    var generic_second: Second { get set }
+}
 
-    static func emptyFfiReturn() -> SignalPairOfCStringPtrCStringPtr {
-        .init()
+internal enum PairOfResultConverter<
+    FirstConverter: NiceReturnConverter,
+    SecondConverter: NiceReturnConverter,
+    PairType: SignalPairOf
+>: NiceReturnConverter
+where PairType.First == FirstConverter.FfiReturn, PairType.Second == SecondConverter.FfiReturn {
+    typealias NiceReturn = (FirstConverter.NiceReturn, SecondConverter.NiceReturn)
+    typealias FfiReturn = PairType
+
+    static func emptyFfiReturn() -> FfiReturn {
+        FfiReturn()
     }
-    static func convertReturn(consuming value: SignalPairOfCStringPtrCStringPtr) throws -> (String, String) {
-        let first = Result { try StringConverter.convertReturn(consuming: value.first) }
-        let second = Result { try StringConverter.convertReturn(consuming: value.second) }
+
+    static func convertReturn(consuming value: FfiReturn) throws -> NiceReturn {
+        let first = Result {
+            try FirstConverter.convertReturn(consuming: value.generic_first)
+        }
+        let second = Result {
+            try SecondConverter.convertReturn(consuming: value.generic_second)
+        }
         return (try first.get(), try second.get())
+    }
+
+}
+
+internal protocol FixedByteArrayHelper {
+    associatedtype Ffi: Sendable
+    static func count() -> Int
+    static func emptyFfi() -> Ffi
+    static func toData(_ ffi: Ffi) -> Data
+}
+extension FixedByteArrayHelper {
+    static func toData(_ ffi: Ffi) -> Data {
+        withUnsafeBytes(of: ffi) { Data($0) }
+    }
+}
+
+internal enum FixedByteArrayConverter<Helper: FixedByteArrayHelper>: NiceArgConverter, NiceReturnConverter {
+    static func convertArg(_ arg: Data) -> (FfiArg, KeepAlive?) {
+        precondition(arg.count == Helper.count())
+        let data = arg as NSData
+        return (data.bytes.assumingMemoryBound(to: Helper.Ffi.self), data)
+    }
+
+    static func convertArgBorrowed<Result>(
+        _ arg: Data,
+        _ thunk: (FfiArg) throws -> Result
+    ) rethrows -> Result {
+        precondition(arg.count == Helper.count())
+        return try arg.withUnsafeBytes {
+            try thunk($0.assumingMemoryBound(to: Helper.Ffi.self).baseAddress!)
+        }
+    }
+
+    static func emptyFfiReturn() -> Helper.Ffi {
+        Helper.emptyFfi()
+    }
+
+    static func convertReturn(consuming value: Helper.Ffi) throws -> Data {
+        Helper.toData(value)
+    }
+
+    typealias NiceArg = Data
+    typealias FfiArg = UnsafePointer<Helper.Ffi>?
+    typealias KeepAlive = NSData
+    typealias NiceReturn = Data
+    typealias FfiReturn = Helper.Ffi
+}
+
+internal enum UuidNiceConverter: NiceArgConverter, NiceReturnConverter {
+    static func convertArg(_ arg: UUID) -> (SignalUuid, Unit?) {
+        (SignalUuid(bytes: arg.uuid), nil)
+    }
+
+    static func convertArgBorrowed<Result>(_ arg: UUID, _ thunk: (SignalUuid) throws -> Result) rethrows -> Result {
+        try thunk(SignalUuid(bytes: arg.uuid))
+    }
+
+    static func emptyFfiReturn() -> SignalUuid {
+        SignalUuid()
+    }
+
+    static func convertReturn(consuming value: SignalUuid) throws -> UUID {
+        UUID(uuid: value.bytes)
+    }
+
+    typealias NiceArg = UUID
+    typealias FfiArg = SignalUuid
+    typealias KeepAlive = Unit
+    typealias NiceReturn = UUID
+    typealias FfiReturn = SignalUuid
+}
+
+internal enum DeviceIdConverter: NiceArgConverter, NiceReturnConverter {
+    typealias NiceArg = DeviceId
+    typealias FfiArg = UInt8
+    typealias KeepAlive = Unit
+    typealias NiceReturn = DeviceId
+    typealias FfiReturn = UInt8
+    static func convertArg(_ arg: NiceArg) -> (FfiArg, KeepAlive?) {
+        (arg.uint8Value, nil)
+    }
+    static func convertArgBorrowed<Result>(_ arg: NiceArg, _ thunk: (FfiArg) throws -> Result) rethrows -> Result {
+        try thunk(arg.uint8Value)
+    }
+    static func emptyFfiReturn() -> FfiReturn {
+        0
+    }
+    static func convertReturn(consuming value: FfiReturn) throws -> NiceReturn {
+        guard let out = DeviceId(validating: value) else {
+            throw SignalError.internalError("Invalid DeviceId")
+        }
+        return out
+    }
+}
+
+internal enum TimestampConverter: NiceArgConverter, NiceReturnConverter {
+    static func convertDate(_ arg: Date) -> UInt64 {
+        UInt64(arg.timeIntervalSince1970 * 1000.0)
+    }
+
+    static func convertArg(_ arg: Date) -> (UInt64, Unit?) {
+        (Self.convertDate(arg), nil)
+    }
+
+    static func convertArgBorrowed<Result>(_ arg: Date, _ thunk: (UInt64) throws -> Result) rethrows -> Result {
+        try thunk(Self.convertDate(arg))
+    }
+
+    static func emptyFfiReturn() -> UInt64 {
+        0
+    }
+
+    static func convertReturn(consuming value: UInt64) throws -> Date {
+        Date(timeIntervalSince1970: TimeInterval(value) / 1000.0)
+    }
+
+    typealias NiceArg = Date
+    typealias FfiArg = UInt64
+    typealias KeepAlive = Unit
+    typealias NiceReturn = Date
+    typealias FfiReturn = UInt64
+}
+
+internal protocol SignalOptionalOf {
+    associatedtype Contents
+    init()
+    init(generic_present: CBool, generic_value: Contents)
+    var generic_present: CBool { get set }
+    var generic_value: Contents { get set }
+}
+
+internal enum OptionalArgConverter<Inner: NiceArgConverter, FfiOptional: SignalOptionalOf>: NiceArgConverter
+where FfiOptional.Contents == Inner.FfiArg {
+    typealias NiceArg = Inner.NiceArg?
+    typealias FfiArg = FfiOptional
+    typealias KeepAlive = Inner.KeepAlive
+
+    static func convertArg(_ arg: Inner.NiceArg?) -> (FfiOptional, Inner.KeepAlive?) {
+        if let arg = arg {
+            let (ffi, keepAlive) = Inner.convertArg(arg)
+            return (FfiOptional(generic_present: true, generic_value: ffi), keepAlive)
+        } else {
+            return (FfiOptional(), nil)
+        }
+    }
+
+    static func convertArgBorrowed<Result>(
+        _ arg: Inner.NiceArg?,
+        _ thunk: (FfiOptional) throws -> Result
+    ) rethrows -> Result {
+        if let arg = arg {
+            return try Inner.convertArgBorrowed(arg) {
+                return try thunk(FfiOptional(generic_present: true, generic_value: $0))
+            }
+        } else {
+            return try thunk(FfiOptional())
+        }
+    }
+}
+
+internal enum OptionalReturnConverter<Inner: NiceReturnConverter, FfiOptional: SignalOptionalOf>: NiceReturnConverter
+where FfiOptional.Contents == Inner.FfiReturn {
+    typealias NiceReturn = Inner.NiceReturn?
+    typealias FfiReturn = FfiOptional
+
+    static func emptyFfiReturn() -> FfiOptional {
+        FfiOptional(generic_present: false, generic_value: Inner.emptyFfiReturn())
+    }
+
+    static func convertReturn(consuming value: FfiOptional) throws -> Inner.NiceReturn? {
+        if value.generic_present {
+            return try Inner.convertReturn(consuming: value.generic_value)
+        } else {
+            return nil
+        }
     }
 }

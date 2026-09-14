@@ -10,10 +10,11 @@ use std::num::NonZeroU16;
 use std::sync::Arc;
 
 use http::{HeaderName, HeaderValue};
+use libsignal_core::LogSafeDisplay;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::certs::RootCertificates;
-use crate::errors::{LogSafeDisplay, RetryLater};
+use crate::errors::RetryLater;
 use crate::host::Host;
 use crate::timeouts::{WS_KEEP_ALIVE_INTERVAL, WS_MAX_IDLE_INTERVAL};
 
@@ -196,8 +197,6 @@ pub trait Connection {
 pub enum DnsSource {
     /// The result was returned from the cache
     Cache,
-    /// The result came from performing a plaintext DNS query over UDP.
-    UdpLookup,
     /// The result came from performing a DNS-over-HTTPS query.
     DnsOverHttpsLookup,
     /// The result came from performing a DNS query using a system resolver.

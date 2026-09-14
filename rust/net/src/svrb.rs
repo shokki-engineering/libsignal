@@ -6,11 +6,12 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 use futures_util::StreamExt as _;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac as _};
 use libsignal_account_keys::{
     BackupForwardSecrecyEncryptionKey, BackupForwardSecrecyToken, BackupKey,
 };
-use libsignal_net_infra::errors::{LogSafeDisplay, RetryLater};
+use libsignal_core::LogSafeDisplay;
+use libsignal_net_infra::errors::RetryLater;
 use libsignal_net_infra::ws::attested::AttestedConnectionError;
 use libsignal_net_infra::ws::{WebSocketConnectError, WebSocketError};
 use libsignal_svrb::proto::backup_metadata;

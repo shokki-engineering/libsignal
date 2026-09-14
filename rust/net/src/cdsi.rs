@@ -5,8 +5,8 @@
 
 use std::default::Default;
 
-use libsignal_core::{Aci, E164, Pni};
-use libsignal_net_infra::errors::{LogSafeDisplay, RetryLater, TransportConnectError};
+use libsignal_core::{Aci, E164, LogSafeDisplay, Pni};
+use libsignal_net_infra::errors::{RetryLater, TransportConnectError};
 use libsignal_net_infra::route::{RouteProvider, UnresolvedWebsocketServiceRoute};
 use libsignal_net_infra::ws::attested::{
     AttestedConnection, AttestedConnectionError, AttestedProtocolError,
@@ -21,7 +21,7 @@ use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::auth::Auth;
 use crate::connect_state::{ConnectionResources, ServiceName, WebSocketTransportConnectorFactory};
-use crate::enclave::{Cdsi, EndpointParams};
+use crate::enclave::{EnclaveKind, EndpointParams, NewHandshake};
 use crate::proto::cds2::{ClientRequest, ClientResponse};
 
 trait FixedLengthSerializable {
@@ -300,12 +300,12 @@ struct RateLimitExceededResponse {
 pub struct ClientResponseCollector(CdsiConnection);
 
 impl CdsiConnection {
-    pub async fn connect_with(
+    pub async fn connect_with<Kind: EnclaveKind + NewHandshake>(
         connection_resources: ConnectionResources<'_, impl WebSocketTransportConnectorFactory>,
         service: ServiceName,
         route_provider: impl RouteProvider<Route = UnresolvedWebsocketServiceRoute>,
         ws_config: crate::infra::ws::Config,
-        params: &EndpointParams<'_, Cdsi>,
+        params: &EndpointParams<'_, Kind>,
         auth: &Auth,
     ) -> Result<Self, LookupError> {
         let (connection, _route_info) = connection_resources

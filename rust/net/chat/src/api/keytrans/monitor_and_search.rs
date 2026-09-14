@@ -8,17 +8,17 @@ use std::ops::ControlFlow;
 use std::time::{Duration, SystemTime};
 
 use libsignal_core::curve::PublicKey;
-use libsignal_core::{Aci, E164};
+use libsignal_core::{Aci, E164, LogSafeDisplay};
 use libsignal_keytrans::{
     AccountData, LastTreeHead, LocalStateUpdate, MonitoringData, StoredTreeHead,
 };
-use libsignal_net::infra::errors::LogSafeDisplay;
 
 use crate::api::RequestError;
 use crate::api::keytrans::maybe_partial::MaybePartial;
 use crate::api::keytrans::{
     AccountDataField, CheckMode, Error, SearchKey, UnauthenticatedChatApi, UsernameHash,
 };
+use crate::impl_debug_from_display;
 use crate::logging::{DebugByCalling, Redact, RedactBytesAsHex};
 
 const MAX_DISTINGUISHED_TREE_AGE: Duration =
@@ -35,21 +35,92 @@ pub async fn check(
     distinguished_tree_head: Option<TreeHeadWithTimestamp>,
     mode: CheckMode,
 ) -> Result<(MaybePartial<AccountData>, LastTreeHead), RequestError<Error>> {
-    let distinguished_tree_head =
-        update_distinguished_if_needed(kt, distinguished_tree_head).await?;
-    let action = Action::plan(
+    let params = CheckParams {
         aci,
-        e164.as_ref(),
-        username_hash.as_ref(),
+        aci_identity_key,
+        e164,
+        username_hash,
         stored_account_data,
-    );
-    log::info!("Action: {}", &action);
+        distinguished_tree_head,
+        mode,
+    };
+    let log_message = format!("{}", params);
+    params.check(kt).await.inspect_err(|_| {
+        log::warn!("{}", log_message);
+    })
+}
 
-    let result = action
-        .execute(kt, aci_identity_key, &distinguished_tree_head, mode)
-        .await?;
+struct CheckParams<'a> {
+    aci: &'a Aci,
+    aci_identity_key: &'a PublicKey,
+    e164: Option<(E164, Vec<u8>)>,
+    username_hash: Option<UsernameHash<'a>>,
+    stored_account_data: Option<AccountData>,
+    distinguished_tree_head: Option<TreeHeadWithTimestamp>,
+    mode: CheckMode,
+}
 
-    Ok((result, distinguished_tree_head))
+impl Display for CheckParams<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        fn erase<T>(x: &Option<T>) -> Option<&str> {
+            x.as_ref().map(|_| "..")
+        }
+
+        let Self {
+            aci: _,
+            aci_identity_key: _,
+            e164,
+            username_hash,
+            stored_account_data,
+            distinguished_tree_head,
+            mode,
+        } = self;
+
+        f.debug_struct("CheckParams")
+            .field("e164", &erase(e164))
+            .field("username_hash", &erase(username_hash))
+            .field("stored_account_data", &stored_account_data)
+            .field("distinguished_tree_head", &distinguished_tree_head)
+            .field("mode", mode)
+            .finish()
+    }
+}
+
+static_assertions::assert_impl_all!(TreeHeadWithTimestamp: LogSafeDisplay);
+// Technically we also need to assert the same for AccountData,
+// but that would require libsignal-keytrans to depend on libsignal-core.
+impl LogSafeDisplay for CheckParams<'_> {}
+
+impl CheckParams<'_> {
+    async fn check(
+        self,
+        kt: &impl UnauthenticatedChatApi,
+    ) -> Result<(MaybePartial<AccountData>, LastTreeHead), RequestError<Error>> {
+        let Self {
+            aci,
+            aci_identity_key,
+            e164,
+            username_hash,
+            stored_account_data,
+            distinguished_tree_head,
+            mode,
+        } = self;
+        let distinguished_tree_head =
+            update_distinguished_if_needed(kt, distinguished_tree_head).await?;
+        let action = Action::plan(
+            aci,
+            e164.as_ref(),
+            username_hash.as_ref(),
+            stored_account_data,
+        );
+        log::info!("Action: {}", action);
+
+        let result = action
+            .execute(kt, aci_identity_key, &distinguished_tree_head, mode)
+            .await?;
+
+        Ok((result, distinguished_tree_head))
+    }
 }
 
 fn is_too_old(stored_at_ms: u64) -> bool {
@@ -68,6 +139,7 @@ fn select_baseline_tree_head(
         // Not recent enough to be used for search/monitor but a fine
         // baseline for refresh.
         Some(timed_head) if is_too_old(timed_head.stored_at_ms) => {
+            log::info!("Distinguished stored_at_ms = {}", timed_head.stored_at_ms);
             ControlFlow::Continue(Some(timed_head.tree_head))
         }
         Some(timed_head) => ControlFlow::Break(timed_head.tree_head),
@@ -114,6 +186,22 @@ impl TreeHeadWithTimestamp {
         })
     }
 }
+
+impl Display for TreeHeadWithTimestamp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            tree_head,
+            stored_at_ms,
+        } = self;
+        f.debug_struct("TreeHeadWithTimestamp")
+            .field("tree_head", &tree_head)
+            .field("stored_at_ms", &stored_at_ms)
+            .finish()
+    }
+}
+
+impl_debug_from_display!(TreeHeadWithTimestamp);
+impl LogSafeDisplay for TreeHeadWithTimestamp {}
 
 /// A more ergonomic search for the clients.
 ///
@@ -665,7 +753,7 @@ fn remove_missing(partial_account_data: &mut MaybePartial<AccountData>) {
         missing_fields,
     } = partial_account_data;
     for field in missing_fields.iter() {
-        log::info!("Version change: untracking {:?}", &field);
+        log::info!("Version change: untracking {:?}", field);
         match field {
             AccountDataField::E164 => inner.e164 = None,
             AccountDataField::UsernameHash => inner.username_hash = None,
@@ -733,7 +821,7 @@ async fn monitor_then_search<'a>(
     // will match between `stored_account_data` and `monitor_account_data`. Meaning, they will
     // either both be Some() or both None.
     let updated_versions = SearchVersions::from_account_data(&monitor_account_data);
-    log::info!("Updated versions: {}", stored_versions.short_description());
+    log::info!("Updated versions: {}", updated_versions.short_description());
     let version_delta = updated_versions
         .try_subtract(&stored_versions)
         .map_err(|_| {

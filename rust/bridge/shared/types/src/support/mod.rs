@@ -9,12 +9,15 @@ use std::marker::PhantomData;
 use std::num::NonZeroU64;
 
 use derive_more::{Deref, DerefMut, From};
+use derive_where::derive_where;
 use ref_cast::RefCast;
 
 mod as_type;
+mod async_mutex;
 mod sequences;
 mod serialized;
 pub use as_type::*;
+pub use async_mutex::*;
 pub use sequences::*;
 pub use serialized::*;
 
@@ -94,6 +97,19 @@ impl std::fmt::Display for IllegalArgumentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
+}
+
+/// Either a request error or an argument-validation failure.
+///
+/// For bridge functions that validate their arguments before making a request, so that a
+/// programmer error surfaces as an invalid-argument error in each app language rather than being
+/// dressed up as something the server said.
+#[derive(Debug, derive_more::From, displaydoc::Display)]
+pub enum RequestOrArgumentError<E> {
+    /// {0}
+    Request(libsignal_net_chat::api::RequestError<E>),
+    /// {0}
+    Argument(IllegalArgumentError),
 }
 
 /// With `bridge_handle_fns`, exposes a Rust type to each of the bridges as a boxed value.
@@ -397,3 +413,21 @@ impl<T, E> ResultLike for Result<T, E> {
     type Success = T;
     type Error = E;
 }
+
+/// A newtype wrapper used to specify that a generic Vec<> mapping should be used.
+#[derive(Clone, derive_more::Into, derive_more::Deref, derive_more::DerefMut)]
+#[derive_where(Default)]
+pub struct BridgeVec<T>(pub Vec<T>);
+
+impl<T, U> From<Vec<U>> for BridgeVec<T>
+where
+    T: From<U>,
+{
+    fn from(value: Vec<U>) -> Self {
+        Self(value.into_iter().map(Into::into).collect())
+    }
+}
+
+/// Marker for returning an error as a value.
+#[derive(Debug, derive_more::From)]
+pub struct BridgedError<T>(pub T);
