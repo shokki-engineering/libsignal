@@ -2,7 +2,7 @@
 
 libsignal makes use of the following open source projects.
 
-## spqr 1.5.3, partial-default-derive 0.1.0, partial-default 0.1.0
+## spqr 1.6.0, partial-default-derive 0.1.0, partial-default 0.1.0
 
 ```
                     GNU AFFERO GENERAL PUBLIC LICENSE
@@ -3152,7 +3152,7 @@ THIS SOFTWARE.
 
 ```
 
-## rustls-webpki 0.103.13
+## rustls-webpki 0.103.15
 
 ```
 Except as otherwise noted, this project is licensed under the following
@@ -3781,7 +3781,7 @@ DEALINGS IN THE SOFTWARE.
 
 ```
 
-## jni-sys-macros 0.4.1, jni-sys 0.3.1, jni-sys 0.4.1
+## jni-sys-macros 0.4.1, jni-sys 0.4.1
 
 ```
 Copyright (c) 2015 The rust-jni-sys Developers
@@ -4058,7 +4058,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## rustls 0.23.41
+## rustls 0.23.46
 
 ```
 Copyright (c) 2016 Joseph Birr-Pixton <jpixton@gmail.com>
@@ -5638,7 +5638,7 @@ DEALINGS IN THE SOFTWARE.
 
 ```
 
-## downcast-rs 1.2.1
+## downcast-rs 2.0.2
 
 ```
 Copyright (c) 2020 Ashish Myles and contributors
@@ -5911,7 +5911,7 @@ SOFTWARE.
 
 ```
 
-## mediasan-common 0.5.3, mp4san-derive 0.5.3, mp4san 0.5.3, webpsan 0.5.3
+## mediasan-common 0.5.4, mp4san-derive 0.5.4, mp4san 0.5.4, webpsan 0.5.4
 
 ```
 Copyright (c) 2022 jessa0
@@ -6581,7 +6581,7 @@ SOFTWARE.
 
 ```
 
-## convert_case 0.10.0, convert_case 0.4.0
+## convert_case 0.10.0
 
 ```
 MIT License
@@ -6689,7 +6689,7 @@ SOFTWARE.
 
 ```
 
-## rustls-platform-verifier-android 0.1.1, rustls-platform-verifier 0.5.3
+## rustls-platform-verifier-android 0.2.0, rustls-platform-verifier 0.7.1
 
 ```
 MIT License
@@ -6743,7 +6743,7 @@ SOFTWARE.
 
 ```
 
-## cesu8 1.1.0, libm 0.2.16
+## libm 0.2.16
 
 ```
 MIT License
@@ -7227,7 +7227,7 @@ SOFTWARE.
 
 ```
 
-## derive_more-impl 2.1.1, derive_more 0.99.20, derive_more 2.1.1
+## derive_more-impl 2.1.1, derive_more 2.1.1
 
 ```
 The MIT License (MIT)
@@ -7254,7 +7254,7 @@ SOFTWARE.
 
 ```
 
-## jni-macros 0.22.4, jni 0.21.1, jni 0.22.4
+## jni-macros 0.22.4, jni 0.22.4
 
 ```
 The MIT License (MIT)

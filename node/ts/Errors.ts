@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+import type { Bytes } from '@signalapp/types';
+
 import { ProtocolAddress, ServiceId } from './Address.js';
 import * as Native from './Native.js';
 import { newNativeHandle } from './internal.js';
@@ -10,6 +12,9 @@ import {
   convertNativeRegistrationSessionState,
   RegistrationSessionState,
 } from './net/RegistrationSession.js';
+import type { PaymentProvider } from './net/chat/PurchaseTypes.js';
+// Re-export this for compatibility.
+export type { PaymentProvider } from './net/chat/PurchaseTypes.js';
 
 export enum ErrorCode {
   Generic,
@@ -111,12 +116,19 @@ export enum ErrorCode {
   ReceiptCredentialErrorReceiptAlreadyIssued,
   TooManyTotpKeys,
   TooManyMfaKeys,
-  OneTimePasswordNotVerified,
+  MfaNotVerified,
+  /** @deprecated Use {@link MfaNotVerified} instead. */
+  OneTimePasswordNotVerified = MfaNotVerified,
   MfaKeyNotFound,
+  WebAuthnRegistrationUnsuccessful,
+
+  ProfileNotFound,
+
+  ReceiptAlreadyRedeemed,
 }
 
 /** Called out as a separate type so it's not confused with a normal ServiceIdBinary. */
-type ServiceIdFixedWidthBinary = Uint8Array<ArrayBuffer>;
+type ServiceIdFixedWidthBinary = Bytes;
 
 /**
  * A failure sending to a recipient on account of not being up to date on their devices.
@@ -155,11 +167,6 @@ export class MismatchedDevicesEntry {
   }
 }
 
-export type PaymentProvider =
-  | 'googlePlayBilling'
-  | 'appleAppStore'
-  | 'stripe'
-  | 'braintree';
 export type ChargeFailure = {
   processor: PaymentProvider;
   code: string;
@@ -235,15 +242,17 @@ export class LibSignalErrorBase extends Error {
     return `${this.name} - ${this.operation}: ${this.message}`;
   }
 
-  /// Like `error.code === code`, but also providing access to any additional properties.
+  /** Like `error.code === code`, but also providing access to any additional properties. */
   public is<E extends ErrorCode>(
     code: E
   ): this is Extract<LibSignalError, { code: E }> {
     return this.code === code;
   }
 
-  /// Like `error instanceof LibSignalErrorBase && error.code === code`, but all in one expression,
-  /// and providing access to any additional properties.
+  /**
+   * Like `error instanceof LibSignalErrorBase && error.code === code`, but all in one expression,
+   * and providing access to any additional properties.
+   */
   public static is<E extends ErrorCode>(
     error: unknown,
     code: E
@@ -608,12 +617,32 @@ export type TooManyMfaKeys = LibSignalErrorCommon & {
   code: ErrorCode.TooManyMfaKeys;
 };
 
-export type OneTimePasswordNotVerified = LibSignalErrorCommon & {
-  code: ErrorCode.OneTimePasswordNotVerified;
+export type MfaNotVerified = LibSignalErrorCommon & {
+  code: ErrorCode.MfaNotVerified;
 };
+/** @deprecated Use {@link MfaNotVerified} instead. */
+export type OneTimePasswordNotVerified = MfaNotVerified;
 
 export type MfaKeyNotFound = LibSignalErrorCommon & {
   code: ErrorCode.MfaKeyNotFound;
+};
+
+export type WebAuthnRegistrationUnsuccessful = LibSignalErrorCommon & {
+  code: ErrorCode.WebAuthnRegistrationUnsuccessful;
+};
+
+export type ProfileNotFound = LibSignalErrorCommon & {
+  code: ErrorCode.ProfileNotFound;
+};
+
+/**
+ * A receipt was already redeemed for a badge.
+ *
+ * Not the same as {@link ReceiptCredentialErrorReceiptAlreadyIssued}, which means a receipt
+ * credential was already issued for the purchase.
+ */
+export type ReceiptAlreadyRedeemed = LibSignalErrorCommon & {
+  code: ErrorCode.ReceiptAlreadyRedeemed;
 };
 
 export type LibSignalError =
@@ -697,5 +726,8 @@ export type LibSignalError =
   | ReceiptCredentialErrorReceiptAlreadyIssued
   | TooManyTotpKeys
   | TooManyMfaKeys
-  | OneTimePasswordNotVerified
-  | MfaKeyNotFound;
+  | MfaNotVerified
+  | MfaKeyNotFound
+  | WebAuthnRegistrationUnsuccessful
+  | ProfileNotFound
+  | ReceiptAlreadyRedeemed;

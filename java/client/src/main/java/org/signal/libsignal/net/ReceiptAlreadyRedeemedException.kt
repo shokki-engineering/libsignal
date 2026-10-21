@@ -1,5 +1,5 @@
 //
-// Copyright 2026 Signal Messenger, LLC
+// Copyright 2026 Signal Messenger, LLC.
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
@@ -9,13 +9,16 @@ import org.signal.libsignal.internal.CalledFromNative
 import java.io.IOException
 
 /**
- * The provided one-time password was not accepted for the pending TOTP key.
+ * A donation receipt was already redeemed for a badge.
+ *
+ * Not the same as [ReceiptCredentialException.ReceiptAlreadyIssued], which means a receipt
+ * credential was already issued for the purchase.
  *
  * See the specific request docs for more information.
  */
-public class OneTimePasswordNotVerifiedException :
+public class ReceiptAlreadyRedeemedException :
   IOException,
-  ConfirmTotpKeyError {
+  RedeemDonationReceiptFailure {
   @CalledFromNative
   public constructor(message: String) : super(message) {
   }

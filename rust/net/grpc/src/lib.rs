@@ -37,17 +37,23 @@ pub mod proto {
                 pub mod device {
                     tonic::include_proto!("org.signal.chat.device");
                 }
+                pub mod donations {
+                    tonic::include_proto!("org.signal.chat.donations");
+                }
                 pub mod keys {
                     tonic::include_proto!("org.signal.chat.keys");
-                }
-                pub mod login_purchase {
-                    tonic::include_proto!("org.signal.chat.purchase");
                 }
                 pub mod messages {
                     tonic::include_proto!("org.signal.chat.messages");
                 }
                 pub mod payments {
                     tonic::include_proto!("org.signal.chat.payments");
+                }
+                pub mod profile {
+                    tonic::include_proto!("org.signal.chat.profile");
+                }
+                pub mod purchase {
+                    tonic::include_proto!("org.signal.chat.purchase");
                 }
 
                 // Not actually a proto, we just make sure to generate our helper file in the same place.
@@ -59,6 +65,15 @@ pub mod proto {
     }
 
     pub use org::signal::chat;
+
+    // Key transparency is served by chat, but its protos are in their own top-level
+    // package rather than under org.signal.chat.
+    //
+    // The doc comments in this proto use bulleted lists that aren't valid Markdown.
+    #[expect(clippy::doc_lazy_continuation)]
+    pub mod kt_query {
+        tonic::include_proto!("kt_query");
+    }
 
     pub mod textsecure {
         tonic::include_proto!("textsecure");

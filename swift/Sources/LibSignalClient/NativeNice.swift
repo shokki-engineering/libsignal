@@ -152,6 +152,33 @@ extension SignalBorrowedSliceOfConstPointerPublicKey: SignalBorrowedSliceOf {
 
 }
 
+extension SignalBorrowedSliceOfConstPointerKyberPublicKey: SignalBorrowedSliceOf {
+
+    typealias Element = SignalConstPointerKyberPublicKey
+
+    init(
+        generic_base: SignalType_ConstPointer_SignalConstPointerKyberPublicKey?,
+        generic_length: size_t,
+    ) {
+        self.init(
+            base: generic_base,
+            length: generic_length,
+
+        )
+    }
+
+    var generic_base: SignalType_ConstPointer_SignalConstPointerKyberPublicKey? {
+        get { self.base }
+        set { base = newValue }
+    }
+
+    var generic_length: size_t {
+        get { self.length }
+        set { length = newValue }
+    }
+
+}
+
 extension SignalBorrowedSliceOfConstPointerCiphertextMessage: SignalBorrowedSliceOf {
 
     typealias Element = SignalConstPointerCiphertextMessage
@@ -364,6 +391,43 @@ extension SignalBorrowedSliceOfusize: SignalBorrowedSliceOf {
     var generic_length: size_t {
         get { self.length }
         set { length = newValue }
+    }
+
+}
+
+extension SignalCPromisec_uchar153: SignalCPromise {
+
+    typealias Result = SignalType_FixedArray153_uint8_t
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_FixedArray153_uint8_t_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
     }
 
 }
@@ -1107,6 +1171,43 @@ extension SignalCPromiseOwnedBuffer: SignalCPromise {
 
 }
 
+extension SignalCPromiseOwnedBufferOfMaxAlignedOwnedBuffer: SignalCPromise {
+
+    typealias Result = SignalOwnedBufferOfMaxAlignedOwnedBuffer
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalOwnedBufferOfMaxAlignedOwnedBuffer_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalOwnedBufferOfMaxAlignedOwnedBuffer_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
+    }
+
+}
+
 extension SignalCPromiseOwnedBufferOfMaxAlignedPairOfCStringPtrAuthCheckResultFfiResult: SignalCPromise {
 
     typealias Result = SignalOwnedBufferOfMaxAlignedPairOfCStringPtrAuthCheckResultFfiResult
@@ -1164,6 +1265,43 @@ extension SignalCPromiseOwnedBufferOfMaxAlignedBridgeConfirmedMfaKeyFfiResult: S
 
     var generic_complete:
         SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalOwnedBufferOfMaxAlignedBridgeConfirmedMfaKeyFfiResult_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
+    }
+
+}
+
+extension SignalCPromiseOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult: SignalCPromise {
+
+    typealias Result = SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult_ConstPointer_void?
     {
         get { self.complete }
         set { complete = newValue }
@@ -1514,6 +1652,43 @@ extension SignalCPromiseBridgePreKeyCountsFfiResult: SignalCPromise {
 
 }
 
+extension SignalCPromiseBridgeWebAuthnCreateParametersFfiResult: SignalCPromise {
+
+    typealias Result = SignalBridgeWebAuthnCreateParametersFfiResult
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalBridgeWebAuthnCreateParametersFfiResult_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalBridgeWebAuthnCreateParametersFfiResult_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
+    }
+
+}
+
 extension SignalCPromiseCopyBackupMediaNextChunkFfiResult: SignalCPromise {
 
     typealias Result = SignalCopyBackupMediaNextChunkFfiResult
@@ -1571,6 +1746,43 @@ extension SignalCPromiseDeleteBackupMediaNextChunkFfiResult: SignalCPromise {
 
     var generic_complete:
         SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalDeleteBackupMediaNextChunkFfiResult_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
+    }
+
+}
+
+extension SignalCPromiseAccountEntitlementsFfiResult: SignalCPromise {
+
+    typealias Result = SignalAccountEntitlementsFfiResult
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalAccountEntitlementsFfiResult_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalAccountEntitlementsFfiResult_ConstPointer_void?
     {
         get { self.complete }
         set { complete = newValue }
@@ -1699,6 +1911,43 @@ extension SignalCPromiseListMediaResponseFfiResult: SignalCPromise {
 
 }
 
+extension SignalCPromiseStartMfaVerificationResponseFfiResult: SignalCPromise {
+
+    typealias Result = SignalStartMfaVerificationResponseFfiResult
+
+    init(
+        generic_complete:
+            SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalStartMfaVerificationResponseFfiResult_ConstPointer_void?,
+        generic_context: SignalType_ConstPointer_void?,
+        generic_cancellation_id: UInt64,
+    ) {
+        self.init(
+            complete: generic_complete,
+            context: generic_context,
+            cancellation_id: generic_cancellation_id,
+
+        )
+    }
+
+    var generic_complete:
+        SignalType_FunctionPointer_void_MutPointer_SignalFfiError_ConstPointer_SignalStartMfaVerificationResponseFfiResult_ConstPointer_void?
+    {
+        get { self.complete }
+        set { complete = newValue }
+    }
+
+    var generic_context: SignalType_ConstPointer_void? {
+        get { self.context }
+        set { context = newValue }
+    }
+
+    var generic_cancellation_id: UInt64 {
+        get { self.cancellation_id }
+        set { cancellation_id = newValue }
+    }
+
+}
+
 extension SignalOptionalOff32: SignalOptionalOf {
 
     typealias Contents = Float
@@ -1753,6 +2002,60 @@ extension SignalOptionalOfBorrowedBuffer: SignalOptionalOf {
 
 }
 
+extension SignalOptionalOfBackupEntitlementFfiResult: SignalOptionalOf {
+
+    typealias Contents = SignalBackupEntitlementFfiResult
+
+    init(
+        generic_present: CBool,
+        generic_value: MaybeUninitOfBackupEntitlementFfiResult,
+    ) {
+        self.init(
+            present: generic_present,
+            value: generic_value,
+
+        )
+    }
+
+    var generic_present: CBool {
+        get { self.present }
+        set { present = newValue }
+    }
+
+    var generic_value: MaybeUninitOfBackupEntitlementFfiResult {
+        get { self.value }
+        set { value = newValue }
+    }
+
+}
+
+extension SignalOptionalOfBridgeWebAuthnAuthenticationParametersFfiResult: SignalOptionalOf {
+
+    typealias Contents = SignalBridgeWebAuthnAuthenticationParametersFfiResult
+
+    init(
+        generic_present: CBool,
+        generic_value: MaybeUninitOfBridgeWebAuthnAuthenticationParametersFfiResult,
+    ) {
+        self.init(
+            present: generic_present,
+            value: generic_value,
+
+        )
+    }
+
+    var generic_present: CBool {
+        get { self.present }
+        set { present = newValue }
+    }
+
+    var generic_value: MaybeUninitOfBridgeWebAuthnAuthenticationParametersFfiResult {
+        get { self.value }
+        set { value = newValue }
+    }
+
+}
+
 extension SignalOptionalOfChargeFailureFfiResult: SignalOptionalOf {
 
     typealias Contents = SignalChargeFailureFfiResult
@@ -1776,6 +2079,74 @@ extension SignalOptionalOfChargeFailureFfiResult: SignalOptionalOf {
     var generic_value: MaybeUninitOfChargeFailureFfiResult {
         get { self.value }
         set { value = newValue }
+    }
+
+}
+
+extension SignalOwnedBufferOfMaxAlignedi32: SignalOwnedBufferOfMaxAligned {
+
+    typealias Element = Int32
+
+    init(
+        generic_base: SignalType_MutPointer_int32_t?,
+        generic_length: size_t,
+        generic_size_bytes: size_t,
+    ) {
+        self.init(
+            base: generic_base,
+            length: generic_length,
+            size_bytes: generic_size_bytes,
+
+        )
+    }
+
+    var generic_base: SignalType_MutPointer_int32_t? {
+        get { self.base }
+        set { base = newValue }
+    }
+
+    var generic_length: size_t {
+        get { self.length }
+        set { length = newValue }
+    }
+
+    var generic_size_bytes: size_t {
+        get { self.size_bytes }
+        set { size_bytes = newValue }
+    }
+
+}
+
+extension SignalOwnedBufferOfMaxAlignedOwnedBuffer: SignalOwnedBufferOfMaxAligned {
+
+    typealias Element = SignalOwnedBuffer
+
+    init(
+        generic_base: SignalType_MutPointer_SignalOwnedBuffer?,
+        generic_length: size_t,
+        generic_size_bytes: size_t,
+    ) {
+        self.init(
+            base: generic_base,
+            length: generic_length,
+            size_bytes: generic_size_bytes,
+
+        )
+    }
+
+    var generic_base: SignalType_MutPointer_SignalOwnedBuffer? {
+        get { self.base }
+        set { base = newValue }
+    }
+
+    var generic_length: size_t {
+        get { self.length }
+        set { length = newValue }
+    }
+
+    var generic_size_bytes: size_t {
+        get { self.size_bytes }
+        set { size_bytes = newValue }
     }
 
 }
@@ -1950,6 +2321,40 @@ extension SignalOwnedBufferOfMaxAlignedBridgeDeleteBackupMediaItemFfiResult: Sig
 
 }
 
+extension SignalOwnedBufferOfMaxAlignedBadgeEntitlementFfiResult: SignalOwnedBufferOfMaxAligned {
+
+    typealias Element = SignalBadgeEntitlementFfiResult
+
+    init(
+        generic_base: SignalType_MutPointer_SignalBadgeEntitlementFfiResult?,
+        generic_length: size_t,
+        generic_size_bytes: size_t,
+    ) {
+        self.init(
+            base: generic_base,
+            length: generic_length,
+            size_bytes: generic_size_bytes,
+
+        )
+    }
+
+    var generic_base: SignalType_MutPointer_SignalBadgeEntitlementFfiResult? {
+        get { self.base }
+        set { base = newValue }
+    }
+
+    var generic_length: size_t {
+        get { self.length }
+        set { length = newValue }
+    }
+
+    var generic_size_bytes: size_t {
+        get { self.size_bytes }
+        set { size_bytes = newValue }
+    }
+
+}
+
 extension SignalOwnedBufferOfMaxAlignedCurrencyInternalFfiResult: SignalOwnedBufferOfMaxAligned {
 
     typealias Element = SignalCurrencyInternalFfiResult
@@ -1968,6 +2373,40 @@ extension SignalOwnedBufferOfMaxAlignedCurrencyInternalFfiResult: SignalOwnedBuf
     }
 
     var generic_base: SignalType_MutPointer_SignalCurrencyInternalFfiResult? {
+        get { self.base }
+        set { base = newValue }
+    }
+
+    var generic_length: size_t {
+        get { self.length }
+        set { length = newValue }
+    }
+
+    var generic_size_bytes: size_t {
+        get { self.size_bytes }
+        set { size_bytes = newValue }
+    }
+
+}
+
+extension SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult: SignalOwnedBufferOfMaxAligned {
+
+    typealias Element = SignalDeviceCapabilityInternalFfiResult
+
+    init(
+        generic_base: SignalType_MutPointer_SignalDeviceCapabilityInternalFfiResult?,
+        generic_length: size_t,
+        generic_size_bytes: size_t,
+    ) {
+        self.init(
+            base: generic_base,
+            length: generic_length,
+            size_bytes: generic_size_bytes,
+
+        )
+    }
+
+    var generic_base: SignalType_MutPointer_SignalDeviceCapabilityInternalFfiResult? {
         get { self.base }
         set { base = newValue }
     }
@@ -2419,6 +2858,33 @@ internal enum FixedByteArrayHelper64: FixedByteArrayHelper {
     }
 }
 
+internal enum FixedByteArrayHelper153: FixedByteArrayHelper {
+    typealias Ffi = (
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8
+    )
+    static func count() -> Int {
+        153
+    }
+    static func emptyFfi() -> Ffi {
+        (
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0
+        )
+    }
+}
+
 internal enum FixedByteArrayHelper329: FixedByteArrayHelper {
     typealias Ffi = (
         UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
@@ -2462,6 +2928,73 @@ internal enum FixedByteArrayHelper329: FixedByteArrayHelper {
     }
 }
 
+internal enum FixedByteArrayHelper473: FixedByteArrayHelper {
+    typealias Ffi = (
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8
+    )
+    static func count() -> Int {
+        473
+    }
+    static func emptyFfi() -> Ffi {
+        (
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0
+        )
+    }
+}
+
+/*
+// AccountEntitlements
+
+internal struct AccountEntitlements {
+    var badges: [BadgeEntitlement]
+    var backup: BackupEntitlement?
+
+}
+
+*/
+
 /*
 // AuthCheckResult
 
@@ -2469,6 +3002,40 @@ internal enum AuthCheckResult {
     case match
     case noMatch
     case invalid
+}
+
+*/
+
+/*
+// BackupEntitlement
+
+internal struct BackupEntitlement {
+    var level: Int64
+    var expiration: Date
+
+}
+
+*/
+
+/*
+// BadgeEntitlement
+
+internal struct BadgeEntitlement {
+    var badgeId: String
+    var expiration: Date
+    var visible: Bool
+
+}
+
+*/
+
+/*
+// BadgeVisibility
+
+internal enum BadgeVisibility {
+    case doNotSet
+    case setVisible
+    case setPrimary
 }
 
 */
@@ -2529,6 +3096,7 @@ internal struct BridgeMessageBackupInfo {
 
 internal enum BridgeMfaKeyKind {
     case totp
+    case webAuthn
     case unknown
 }
 
@@ -2536,6 +3104,11 @@ internal struct BridgeMfaMetadata {
     var name: String
     var createdAt: Date
 
+}
+
+internal enum BridgeMfaVerificationCredential {
+    case totp(password: Int32)
+    case webAuthn(json: String)
 }
 
 internal struct BridgePendingTotpKey {
@@ -2556,6 +3129,25 @@ internal struct BridgeTotpParameters {
     var algorithm: String
     var passwordLength: Int32
     var timeStepSeconds: Int32
+
+}
+
+/*
+// WebAuthnAuthenticationParameters
+
+internal struct BridgeWebAuthnAuthenticationParameters {
+    var challenge: Data
+    var timeoutSeconds: Int32
+    var allowedCredentialIds: [Data]
+
+}
+
+*/
+
+internal struct BridgeWebAuthnCreateParameters {
+    var userHandle: Data
+    var allowedAlgorithms: [Int32]
+    var excludeCredentialIds: [Data]
 
 }
 
@@ -2629,6 +3221,9 @@ internal struct DeleteBackupMediaNextChunk {
 
 }
 
+/*
+// DeviceCapability
+
 internal enum DeviceCapabilityInternal {
     case storage
     case transfer
@@ -2638,6 +3233,8 @@ internal enum DeviceCapabilityInternal {
     case usernameChangeSyncMessage
     case optionalPhoneNumber
 }
+
+*/
 
 /*
 // GetStickerUploadFormsResponse
@@ -2681,6 +3278,16 @@ internal struct ListMediaResponse {
 }
 
 /*
+// LoginReceiptLevel
+
+internal enum LoginReceiptLevel {
+    case normal
+    case sandbox
+}
+
+*/
+
+/*
 // PaymentProvider
 
 internal enum PaymentProvider {
@@ -2708,6 +3315,40 @@ internal struct S3UploadFormInternal {
 
 */
 
+/*
+// StartMfaVerificationResponse
+
+internal struct StartMfaVerificationResponse {
+    var hasTotp: Bool
+    var webauthnParams: WebAuthnAuthenticationParameters?
+
+}
+
+*/
+
+internal enum DerivedReturnConverterAccountEntitlements: NiceReturnConverter {
+    typealias NiceReturn = AccountEntitlements
+    typealias FfiReturn = SignalAccountEntitlementsFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalAccountEntitlementsFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let badges = Result {
+            try ArrayReturnConverter<
+                DerivedReturnConverterBadgeEntitlement, SignalOwnedBufferOfMaxAlignedBadgeEntitlementFfiResult
+            >.convertReturn(consuming: ffiValue.badges)
+        }
+        let backup = Result {
+            try OptionalReturnConverter<
+                DerivedReturnConverterBackupEntitlement, SignalOptionalOfBackupEntitlementFfiResult
+            >.convertReturn(consuming: ffiValue.backup)
+        }
+
+        return AccountEntitlements(badges: try badges.get(), backup: try backup.get())
+    }
+}
+
 internal enum DerivedReturnConverterAuthCheckResult: NiceReturnConverter {
     typealias NiceReturn = AuthCheckResult
     typealias FfiReturn = SignalAuthCheckResultFfiResult
@@ -2726,6 +3367,41 @@ internal enum DerivedReturnConverterAuthCheckResult: NiceReturnConverter {
         default:
             throw SignalError.internalError("Unexpected enum tag for AuthCheckResult: \(ffiTag)")
         }
+    }
+}
+
+internal enum DerivedReturnConverterBackupEntitlement: NiceReturnConverter {
+    typealias NiceReturn = BackupEntitlement
+    typealias FfiReturn = SignalBackupEntitlementFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalBackupEntitlementFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let level = Result { try IdentityResultConverter<Int64>.convertReturn(consuming: ffiValue.level) }
+        let expiration = Result { try TimestampConverter.convertReturn(consuming: ffiValue.expiration) }
+
+        return BackupEntitlement(level: try level.get(), expiration: try expiration.get())
+    }
+}
+
+internal enum DerivedReturnConverterBadgeEntitlement: NiceReturnConverter {
+    typealias NiceReturn = BadgeEntitlement
+    typealias FfiReturn = SignalBadgeEntitlementFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalBadgeEntitlementFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let badge_id = Result { try StringConverter.convertReturn(consuming: ffiValue.badge_id) }
+        let expiration = Result { try TimestampConverter.convertReturn(consuming: ffiValue.expiration) }
+        let visible = Result { try IdentityResultConverter<Bool>.convertReturn(consuming: ffiValue.visible) }
+
+        return BadgeEntitlement(
+            badgeId: try badge_id.get(),
+            expiration: try expiration.get(),
+            visible: try visible.get()
+        )
     }
 }
 
@@ -2886,6 +3562,8 @@ internal enum DerivedReturnConverterBridgeMfaKeyKind: NiceReturnConverter {
         switch ffiTag {
         case SignalBridgeMfaKeyKindFfiResultTotp:
             return BridgeMfaKeyKind.totp
+        case SignalBridgeMfaKeyKindFfiResultWebAuthn:
+            return BridgeMfaKeyKind.webAuthn
         case SignalBridgeMfaKeyKindFfiResultUnknown:
             return BridgeMfaKeyKind.unknown
         default:
@@ -2976,6 +3654,60 @@ internal enum DerivedReturnConverterBridgeTotpParameters: NiceReturnConverter {
             algorithm: try algorithm.get(),
             passwordLength: try password_length.get(),
             timeStepSeconds: try time_step_seconds.get()
+        )
+    }
+}
+
+internal enum DerivedReturnConverterBridgeWebAuthnAuthenticationParameters: NiceReturnConverter {
+    typealias NiceReturn = WebAuthnAuthenticationParameters
+    typealias FfiReturn = SignalBridgeWebAuthnAuthenticationParametersFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalBridgeWebAuthnAuthenticationParametersFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let challenge = Result { try DataConverter.convertReturn(consuming: ffiValue.challenge) }
+        let timeout_seconds = Result {
+            try IdentityResultConverter<Int32>.convertReturn(consuming: ffiValue.timeout_seconds)
+        }
+        let allowed_credential_ids = Result {
+            try ArrayReturnConverter<DataConverter, SignalOwnedBufferOfMaxAlignedOwnedBuffer>.convertReturn(
+                consuming: ffiValue.allowed_credential_ids
+            )
+        }
+
+        return WebAuthnAuthenticationParameters(
+            challenge: try challenge.get(),
+            timeoutSeconds: try timeout_seconds.get(),
+            allowedCredentialIds: try allowed_credential_ids.get()
+        )
+    }
+}
+
+internal enum DerivedReturnConverterBridgeWebAuthnCreateParameters: NiceReturnConverter {
+    typealias NiceReturn = BridgeWebAuthnCreateParameters
+    typealias FfiReturn = SignalBridgeWebAuthnCreateParametersFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalBridgeWebAuthnCreateParametersFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let user_handle = Result { try DataConverter.convertReturn(consuming: ffiValue.user_handle) }
+        let allowed_algorithms = Result {
+            try ArrayReturnConverter<IdentityResultConverter<Int32>, SignalOwnedBufferOfMaxAlignedi32>.convertReturn(
+                consuming: ffiValue.allowed_algorithms
+            )
+        }
+        let exclude_credential_ids = Result {
+            try ArrayReturnConverter<DataConverter, SignalOwnedBufferOfMaxAlignedOwnedBuffer>.convertReturn(
+                consuming: ffiValue.exclude_credential_ids
+            )
+        }
+
+        return BridgeWebAuthnCreateParameters(
+            userHandle: try user_handle.get(),
+            allowedAlgorithms: try allowed_algorithms.get(),
+            excludeCredentialIds: try exclude_credential_ids.get()
         )
     }
 }
@@ -3090,6 +3822,35 @@ internal enum DerivedReturnConverterDeleteBackupMediaNextChunk: NiceReturnConver
         }
 
         return DeleteBackupMediaNextChunk(chunk: try chunk.get(), termination: try termination.get())
+    }
+}
+
+internal enum DerivedReturnConverterDeviceCapabilityInternal: NiceReturnConverter {
+    typealias NiceReturn = DeviceCapability
+    typealias FfiReturn = SignalDeviceCapabilityInternalFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalDeviceCapabilityInternalFfiResult(0)
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+        let ffiTag = ffiValue
+        switch ffiTag {
+        case SignalDeviceCapabilityInternalFfiResultStorage:
+            return DeviceCapability.storage
+        case SignalDeviceCapabilityInternalFfiResultTransfer:
+            return DeviceCapability.transfer
+        case SignalDeviceCapabilityInternalFfiResultAttachmentBackfill:
+            return DeviceCapability.attachmentBackfill
+        case SignalDeviceCapabilityInternalFfiResultSparsePostQuantumRatchet:
+            return DeviceCapability.sparsePostQuantumRatchet
+        case SignalDeviceCapabilityInternalFfiResultProfilesV2:
+            return DeviceCapability.profilesV2
+        case SignalDeviceCapabilityInternalFfiResultUsernameChangeSyncMessage:
+            return DeviceCapability.usernameChangeSyncMessage
+        case SignalDeviceCapabilityInternalFfiResultOptionalPhoneNumber:
+            return DeviceCapability.optionalPhoneNumber
+        default:
+            throw SignalError.internalError("Unexpected enum tag for DeviceCapabilityInternal: \(ffiTag)")
+        }
     }
 }
 
@@ -3241,6 +4002,63 @@ internal enum DerivedReturnConverterS3UploadFormInternal: NiceReturnConverter {
             policy: try policy.get(),
             signature: try signature.get()
         )
+    }
+}
+
+internal enum DerivedReturnConverterStartMfaVerificationResponse: NiceReturnConverter {
+    typealias NiceReturn = StartMfaVerificationResponse
+    typealias FfiReturn = SignalStartMfaVerificationResponseFfiResult
+    static func emptyFfiReturn() -> FfiReturn {
+        SignalStartMfaVerificationResponseFfiResult()
+    }
+    static func convertReturn(consuming ffiValue: FfiReturn) throws -> NiceReturn {
+
+        let has_totp = Result { try IdentityResultConverter<Bool>.convertReturn(consuming: ffiValue.has_totp) }
+        let webauthn_params = Result {
+            try OptionalReturnConverter<
+                DerivedReturnConverterBridgeWebAuthnAuthenticationParameters,
+                SignalOptionalOfBridgeWebAuthnAuthenticationParametersFfiResult
+            >.convertReturn(consuming: ffiValue.webauthn_params)
+        }
+
+        return StartMfaVerificationResponse(hasTotp: try has_totp.get(), webauthnParams: try webauthn_params.get())
+    }
+}
+
+internal enum DerivedArgConverterBadgeVisibility: NiceArgConverter {
+    typealias NiceArg = BadgeVisibility
+    typealias FfiArg = SignalBadgeVisibilityFfiArg
+    typealias KeepAlive = ()
+    static func convertArg(_ niceArg: NiceArg) -> (FfiArg, KeepAlive?) {
+        switch niceArg {
+
+        case .doNotSet:
+            return (SignalBadgeVisibilityFfiArgDoNotSet, nil)
+
+        case .setVisible:
+            return (SignalBadgeVisibilityFfiArgSetVisible, nil)
+
+        case .setPrimary:
+            return (SignalBadgeVisibilityFfiArgSetPrimary, nil)
+
+        }
+    }
+    static func convertArgBorrowed<Result>(
+        _ niceArg: NiceArg,
+        _ niceThunk: (FfiArg) throws -> Result,
+    ) rethrows -> Result {
+        switch niceArg {
+
+        case .doNotSet:
+            return try niceThunk(SignalBadgeVisibilityFfiArgDoNotSet)
+
+        case .setVisible:
+            return try niceThunk(SignalBadgeVisibilityFfiArgSetVisible)
+
+        case .setPrimary:
+            return try niceThunk(SignalBadgeVisibilityFfiArgSetPrimary)
+
+        }
     }
 }
 
@@ -3402,6 +4220,119 @@ internal enum DerivedArgConverterBridgeDeleteBackupMediaItem: NiceArgConverter {
             }
         }
 
+    }
+}
+
+internal enum BridgeMfaVerificationCredentialArgConverterKeepAlive {
+    case totp((IdentityArgConverter<Int32>.KeepAlive?))
+    case webAuthn((StringConverter.KeepAlive?))
+}
+
+internal enum DerivedArgConverterBridgeMfaVerificationCredential: NiceArgConverter {
+    typealias NiceArg = BridgeMfaVerificationCredential
+    typealias FfiArg = SignalBridgeMfaVerificationCredentialFfiArg
+    typealias KeepAlive = BridgeMfaVerificationCredentialArgConverterKeepAlive
+    static func convertArg(_ niceArg: NiceArg) -> (FfiArg, KeepAlive?) {
+        switch niceArg {
+        case .totp(
+            let password,
+        ):
+
+            let (password_ffi, password_keepalive):
+                (
+                    IdentityArgConverter<Int32>.FfiArg,
+                    IdentityArgConverter<Int32>.KeepAlive?,
+                ) = IdentityArgConverter<Int32>.convertArg(password)
+
+            let ffiStructArg = SignalBridgeMfaVerificationCredentialFfiArgSignalTotp_Body(password: password_ffi, )
+            let ffiStructKeepAlive: (IdentityArgConverter<Int32>.KeepAlive?, )? =
+                (password_keepalive != nil || false)
+                ? (password_keepalive,)
+                : nil
+
+            return (
+                SignalBridgeMfaVerificationCredentialFfiArg.init(
+                    tag: SignalBridgeMfaVerificationCredentialFfiArgTotp,
+                    .init(totp: ffiStructArg),
+                ),
+                ffiStructKeepAlive.map { .totp($0) },
+            )
+
+        case .webAuthn(
+            let json,
+        ):
+
+            let (json_ffi, json_keepalive):
+                (
+                    StringConverter.FfiArg,
+                    StringConverter.KeepAlive?,
+                ) = StringConverter.convertArg(json)
+
+            let ffiStructArg = SignalBridgeMfaVerificationCredentialFfiArgSignalWebAuthn_Body(json: json_ffi, )
+            let ffiStructKeepAlive: (StringConverter.KeepAlive?, )? =
+                (json_keepalive != nil || false)
+                ? (json_keepalive,)
+                : nil
+
+            return (
+                SignalBridgeMfaVerificationCredentialFfiArg.init(
+                    tag: SignalBridgeMfaVerificationCredentialFfiArgWebAuthn,
+                    .init(web_authn: ffiStructArg),
+                ),
+                ffiStructKeepAlive.map { .webAuthn($0) },
+            )
+
+        }
+    }
+    static func convertArgBorrowed<Result>(
+        _ niceArg: NiceArg,
+        _ niceThunk: (FfiArg) throws -> Result,
+    ) rethrows -> Result {
+        switch niceArg {
+
+        case .totp(
+            let password,
+        ):
+
+            return try IdentityArgConverter<Int32>.convertArgBorrowed(password) {
+                ffi_password in
+
+                return try niceThunk(
+                    SignalBridgeMfaVerificationCredentialFfiArg.init(
+                        tag: SignalBridgeMfaVerificationCredentialFfiArgTotp,
+                        .init(
+                            totp:
+                                SignalBridgeMfaVerificationCredentialFfiArgSignalTotp_Body(
+                                    password: ffi_password,
+                                )
+                        ),
+                    )
+                )
+
+            }
+
+        case .webAuthn(
+            let json,
+        ):
+
+            return try StringConverter.convertArgBorrowed(json) {
+                ffi_json in
+
+                return try niceThunk(
+                    SignalBridgeMfaVerificationCredentialFfiArg.init(
+                        tag: SignalBridgeMfaVerificationCredentialFfiArgWebAuthn,
+                        .init(
+                            web_authn:
+                                SignalBridgeMfaVerificationCredentialFfiArgSignalWebAuthn_Body(
+                                    json: ffi_json,
+                                )
+                        ),
+                    )
+                )
+
+            }
+
+        }
     }
 }
 
@@ -3848,7 +4779,7 @@ internal enum DerivedArgConverterCallQualitySurveyInternal: NiceArgConverter {
 }
 
 internal enum DerivedArgConverterDeviceCapabilityInternal: NiceArgConverter {
-    typealias NiceArg = DeviceCapabilityInternal
+    typealias NiceArg = DeviceCapability
     typealias FfiArg = SignalDeviceCapabilityInternalFfiArg
     typealias KeepAlive = ()
     static func convertArg(_ niceArg: NiceArg) -> (FfiArg, KeepAlive?) {
@@ -3903,6 +4834,37 @@ internal enum DerivedArgConverterDeviceCapabilityInternal: NiceArgConverter {
 
         case .optionalPhoneNumber:
             return try niceThunk(SignalDeviceCapabilityInternalFfiArgOptionalPhoneNumber)
+
+        }
+    }
+}
+
+internal enum DerivedArgConverterLoginReceiptLevel: NiceArgConverter {
+    typealias NiceArg = LoginReceiptLevel
+    typealias FfiArg = SignalLoginReceiptLevelFfiArg
+    typealias KeepAlive = ()
+    static func convertArg(_ niceArg: NiceArg) -> (FfiArg, KeepAlive?) {
+        switch niceArg {
+
+        case .normal:
+            return (SignalLoginReceiptLevelFfiArgNormal, nil)
+
+        case .sandbox:
+            return (SignalLoginReceiptLevelFfiArgSandbox, nil)
+
+        }
+    }
+    static func convertArgBorrowed<Result>(
+        _ niceArg: NiceArg,
+        _ niceThunk: (FfiArg) throws -> Result,
+    ) rethrows -> Result {
+        switch niceArg {
+
+        case .normal:
+            return try niceThunk(SignalLoginReceiptLevelFfiArgNormal)
+
+        case .sandbox:
+            return try niceThunk(SignalLoginReceiptLevelFfiArgSandbox)
 
         }
     }
@@ -4065,6 +5027,38 @@ internal enum NativeNice {
         return try UuidNiceConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_create_donation_permits(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        requestContext request_context: DonationPermitRequestContext,
+        serverParams server_params: ServerPublicParams,
+    ) async throws -> [DonationPermit] {
+        let rawOutput:
+            ArrayReturnConverter<ByteArrayConverter<DonationPermit>, SignalOwnedBufferOfMaxAlignedOwnedBuffer>.FfiReturn =
+                try await asyncContext.invokeAsyncFunction {
+                    promiseFfi,
+                    asyncContextFfi in
+                    BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                        .convertArgBorrowed(chat) { chatFfi in
+                            ByteArrayConverter<DonationPermitRequestContext>.convertArgBorrowed(request_context) {
+                                request_contextFfi in
+                                BridgeHandleRefConverter<SignalMutPointerServerPublicParams, ServerPublicParams>
+                                    .convertArgBorrowed(server_params) { server_paramsFfi in
+                                        SignalFfi.signal_authenticated_chat_connection_create_donation_permits(
+                                            promiseFfi,
+                                            asyncContextFfi.const(),
+                                            chatFfi,
+                                            request_contextFfi,
+                                            server_paramsFfi,
+                                        )
+                                    }
+                            }
+                        }
+                }
+        return try ArrayReturnConverter<ByteArrayConverter<DonationPermit>, SignalOwnedBufferOfMaxAlignedOwnedBuffer>
+            .convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_delete_account(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4125,6 +5119,78 @@ internal enum NativeNice {
         return try VoidConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_finish_mfa_verification(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        credential: BridgeMfaVerificationCredential,
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        DerivedArgConverterBridgeMfaVerificationCredential.convertArgBorrowed(credential) {
+                            credentialFfi in
+                            SignalFfi.signal_authenticated_chat_connection_finish_mfa_verification(
+                                promiseFfi,
+                                asyncContextFfi.const(),
+                                chatFfi,
+                                credentialFfi,
+                            )
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_finish_web_authn_registration(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        attestationObject attestation_object: Data,
+        collectedClientDataJson collected_client_data_json: String,
+        name: String,
+        createdAt created_at: Date,
+        svrKey svr_key: Data,
+        rng: Int64,
+    ) async throws -> Int32 {
+        let rawOutput: IdentityResultConverter<Int32>.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        DataConverter.convertArgBorrowed(attestation_object) { attestation_objectFfi in
+                            StringConverter.convertArgBorrowed(collected_client_data_json) {
+                                collected_client_data_jsonFfi in
+                                StringConverter.convertArgBorrowed(name) { nameFfi in
+                                    TimestampConverter.convertArgBorrowed(created_at) { created_atFfi in
+                                        FixedByteArrayConverter<FixedByteArrayHelper32>.convertArgBorrowed(svr_key) {
+                                            svr_keyFfi in
+                                            IdentityArgConverter.convertArgBorrowed(rng) { rngFfi in
+                                                SignalFfi
+                                                    .signal_authenticated_chat_connection_finish_web_authn_registration(
+                                                        promiseFfi,
+                                                        asyncContextFfi.const(),
+                                                        chatFfi,
+                                                        attestation_objectFfi,
+                                                        collected_client_data_jsonFfi,
+                                                        nameFfi,
+                                                        created_atFfi,
+                                                        svr_keyFfi,
+                                                        rngFfi,
+                                                    )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+            }
+        return try IdentityResultConverter<Int32>.convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_generate_totp_key(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4143,6 +5209,33 @@ internal enum NativeNice {
                     }
             }
         return try DerivedReturnConverterBridgePendingTotpKey.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_get_capabilities(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+    ) async throws -> [DeviceCapability] {
+        let rawOutput:
+            ArrayReturnConverter<
+                DerivedReturnConverterDeviceCapabilityInternal,
+                SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult
+            >.FfiReturn =
+                try await asyncContext.invokeAsyncFunction {
+                    promiseFfi,
+                    asyncContextFfi in
+                    BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                        .convertArgBorrowed(chat) { chatFfi in
+                            SignalFfi.signal_authenticated_chat_connection_get_capabilities(
+                                promiseFfi,
+                                asyncContextFfi.const(),
+                                chatFfi,
+                            )
+                        }
+                }
+        return try ArrayReturnConverter<
+            DerivedReturnConverterDeviceCapabilityInternal,
+            SignalOwnedBufferOfMaxAlignedDeviceCapabilityInternalFfiResult
+        >.convertReturn(consuming: rawOutput)
 
     }
     internal static func AuthenticatedChatConnection_get_currency_conversions(
@@ -4188,6 +5281,26 @@ internal enum NativeNice {
         return try ArrayReturnConverter<
             DerivedReturnConverterLinkedDeviceInternal, SignalOwnedBufferOfMaxAlignedLinkedDeviceInternalFfiResult
         >.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_get_entitlements(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+    ) async throws -> AccountEntitlements {
+        let rawOutput: DerivedReturnConverterAccountEntitlements.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        SignalFfi.signal_authenticated_chat_connection_get_entitlements(
+                            promiseFfi,
+                            asyncContextFfi.const(),
+                            chatFfi,
+                        )
+                    }
+            }
+        return try DerivedReturnConverterAccountEntitlements.convertReturn(consuming: rawOutput)
 
     }
     internal static func AuthenticatedChatConnection_get_pre_key_count(
@@ -4288,6 +5401,35 @@ internal enum NativeNice {
         return try VoidConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_redeem_donation_receipt(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        presentation: ReceiptCredentialPresentation,
+        visibility: BadgeVisibility,
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        FixedLengthSerializedConverter<ReceiptCredentialPresentation, FixedByteArrayHelper329>
+                            .convertArgBorrowed(presentation) { presentationFfi in
+                                DerivedArgConverterBadgeVisibility.convertArgBorrowed(visibility) { visibilityFfi in
+                                    SignalFfi.signal_authenticated_chat_connection_redeem_donation_receipt(
+                                        promiseFfi,
+                                        asyncContextFfi.const(),
+                                        chatFfi,
+                                        presentationFfi,
+                                        visibilityFfi,
+                                    )
+                                }
+                            }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_remove_device(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4336,6 +5478,38 @@ internal enum NativeNice {
         return try VoidConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_report_message(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        source: Aci,
+        messageGuid message_guid: UUID,
+        reportSpamToken report_spam_token: Data,
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        AciConverter.convertArgBorrowed(source) { sourceFfi in
+                            UuidNiceConverter.convertArgBorrowed(message_guid) { message_guidFfi in
+                                DataConverter.convertArgBorrowed(report_spam_token) { report_spam_tokenFfi in
+                                    SignalFfi.signal_authenticated_chat_connection_report_message(
+                                        promiseFfi,
+                                        asyncContextFfi.const(),
+                                        chatFfi,
+                                        sourceFfi,
+                                        message_guidFfi,
+                                        report_spam_tokenFfi,
+                                    )
+                                }
+                            }
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_reserve_username_hash(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4365,7 +5539,7 @@ internal enum NativeNice {
     internal static func AuthenticatedChatConnection_set_capabilities(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
-        capabilities: [DeviceCapabilityInternal],
+        capabilities: [DeviceCapability],
     ) async throws {
         let rawOutput: VoidConverter.FfiReturn =
             try await asyncContext.invokeAsyncFunction {
@@ -4441,6 +5615,43 @@ internal enum NativeNice {
         return try VoidConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_set_last_resort_kem_pre_key(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        identityType identity_type: ServiceIdKind,
+        id: UInt32,
+        key: KEMPublicKey,
+        signature: Data,
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        ServiceIdKindConverter.convertArgBorrowed(identity_type) { identity_typeFfi in
+                            IdentityArgConverter<UInt32>.convertArgBorrowed(id) { idFfi in
+                                BridgeHandleRefConverter<SignalMutPointerKyberPublicKey, KEMPublicKey>
+                                    .convertArgBorrowed(key) { keyFfi in
+                                        DataConverter.convertArgBorrowed(signature) { signatureFfi in
+                                            SignalFfi.signal_authenticated_chat_connection_set_last_resort_kem_pre_key(
+                                                promiseFfi,
+                                                asyncContextFfi.const(),
+                                                chatFfi,
+                                                identity_typeFfi,
+                                                idFfi,
+                                                keyFfi,
+                                                signatureFfi,
+                                            )
+                                        }
+                                    }
+                            }
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_set_mfa_key_metadata(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4473,6 +5684,86 @@ internal enum NativeNice {
                                                 rngFfi,
                                             )
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_set_one_time_ec_pre_keys(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        identityType identity_type: ServiceIdKind,
+        preKeyIds pre_key_ids: [UInt32],
+        preKeyData pre_key_data: [PublicKey],
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        ServiceIdKindConverter.convertArgBorrowed(identity_type) { identity_typeFfi in
+                            ArrayArgConverter<IdentityArgConverter, SignalBorrowedSliceOfu32>.convertArgBorrowed(
+                                pre_key_ids
+                            ) { pre_key_idsFfi in
+                                ArrayArgConverter<
+                                    BridgeHandleRefConverter<SignalMutPointerPublicKey, PublicKey>,
+                                    SignalBorrowedSliceOfConstPointerPublicKey
+                                >.convertArgBorrowed(pre_key_data) { pre_key_dataFfi in
+                                    SignalFfi.signal_authenticated_chat_connection_set_one_time_ec_pre_keys(
+                                        promiseFfi,
+                                        asyncContextFfi.const(),
+                                        chatFfi,
+                                        identity_typeFfi,
+                                        pre_key_idsFfi,
+                                        pre_key_dataFfi,
+                                    )
+                                }
+                            }
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_set_one_time_kem_pre_keys(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        identityType identity_type: ServiceIdKind,
+        preKeyIds pre_key_ids: [UInt32],
+        preKeyData pre_key_data: [KEMPublicKey],
+        preKeySignatures pre_key_signatures: [Data],
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        ServiceIdKindConverter.convertArgBorrowed(identity_type) { identity_typeFfi in
+                            ArrayArgConverter<IdentityArgConverter, SignalBorrowedSliceOfu32>.convertArgBorrowed(
+                                pre_key_ids
+                            ) { pre_key_idsFfi in
+                                ArrayArgConverter<
+                                    BridgeHandleRefConverter<SignalMutPointerKyberPublicKey, KEMPublicKey>,
+                                    SignalBorrowedSliceOfConstPointerKyberPublicKey
+                                >.convertArgBorrowed(pre_key_data) { pre_key_dataFfi in
+                                    ArrayArgConverter<DataConverter, SignalBorrowedSliceOfBuffers>.convertArgBorrowed(
+                                        pre_key_signatures
+                                    ) { pre_key_signaturesFfi in
+                                        SignalFfi.signal_authenticated_chat_connection_set_one_time_kem_pre_keys(
+                                            promiseFfi,
+                                            asyncContextFfi.const(),
+                                            chatFfi,
+                                            identity_typeFfi,
+                                            pre_key_idsFfi,
+                                            pre_key_dataFfi,
+                                            pre_key_signaturesFfi,
+                                        )
                                     }
                                 }
                             }
@@ -4554,6 +5845,43 @@ internal enum NativeNice {
         return try VoidConverter.convertReturn(consuming: rawOutput)
 
     }
+    internal static func AuthenticatedChatConnection_set_signed_ec_pre_key(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+        identityType identity_type: ServiceIdKind,
+        id: UInt32,
+        key: PublicKey,
+        signature: Data,
+    ) async throws {
+        let rawOutput: VoidConverter.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        ServiceIdKindConverter.convertArgBorrowed(identity_type) { identity_typeFfi in
+                            IdentityArgConverter<UInt32>.convertArgBorrowed(id) { idFfi in
+                                BridgeHandleRefConverter<SignalMutPointerPublicKey, PublicKey>.convertArgBorrowed(key) {
+                                    keyFfi in
+                                    DataConverter.convertArgBorrowed(signature) { signatureFfi in
+                                        SignalFfi.signal_authenticated_chat_connection_set_signed_ec_pre_key(
+                                            promiseFfi,
+                                            asyncContextFfi.const(),
+                                            chatFfi,
+                                            identity_typeFfi,
+                                            idFfi,
+                                            keyFfi,
+                                            signatureFfi,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+            }
+        return try VoidConverter.convertReturn(consuming: rawOutput)
+
+    }
     internal static func AuthenticatedChatConnection_set_username_link(
         asyncContext: TokioAsyncContext,
         chat: AuthenticatedChatConnection,
@@ -4580,6 +5908,106 @@ internal enum NativeNice {
                     }
             }
         return try UuidNiceConverter.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_start_mfa_verification(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+    ) async throws -> StartMfaVerificationResponse {
+        let rawOutput: DerivedReturnConverterStartMfaVerificationResponse.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        SignalFfi.signal_authenticated_chat_connection_start_mfa_verification(
+                            promiseFfi,
+                            asyncContextFfi.const(),
+                            chatFfi,
+                        )
+                    }
+            }
+        return try DerivedReturnConverterStartMfaVerificationResponse.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func AuthenticatedChatConnection_start_web_authn_registration(
+        asyncContext: TokioAsyncContext,
+        chat: AuthenticatedChatConnection,
+    ) async throws -> BridgeWebAuthnCreateParameters {
+        let rawOutput: DerivedReturnConverterBridgeWebAuthnCreateParameters.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerAuthenticatedChatConnection, AuthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        SignalFfi.signal_authenticated_chat_connection_start_web_authn_registration(
+                            promiseFfi,
+                            asyncContextFfi.const(),
+                            chatFfi,
+                        )
+                    }
+            }
+        return try DerivedReturnConverterBridgeWebAuthnCreateParameters.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func BackupJsonExporter_ExportFrames(
+        exporter: BackupJsonExporter,
+        frames: Data,
+    ) throws -> [(String?, String?)] {
+        try BridgeHandleMutRefConverter<SignalMutPointerBackupJsonExporter, BackupJsonExporter>.convertArgBorrowed(
+            exporter
+        ) { exporterFfi in
+            try DataConverter.convertArgBorrowed(frames) { framesFfi in
+                var rawOutput = ArrayReturnConverter<
+                    PairOfResultConverter<
+                        OptionalStringConverter, OptionalStringConverter, SignalPairOfCStringPtrCStringPtr
+                    >, SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr
+                >.emptyFfiReturn()
+                try checkError(
+                    SignalFfi.signal_backup_json_exporter_export_frames(
+                        &rawOutput,
+                        exporterFfi,
+                        framesFfi,
+                    )
+                )
+                return try ArrayReturnConverter<
+                    PairOfResultConverter<
+                        OptionalStringConverter, OptionalStringConverter, SignalPairOfCStringPtrCStringPtr
+                    >, SignalOwnedBufferOfMaxAlignedPairOfCStringPtrCStringPtr
+                >.convertReturn(consuming: rawOutput)
+            }
+        }
+
+    }
+    internal static func BackupJsonExporter_Finish(
+        exporter: BackupJsonExporter,
+    ) throws {
+        try BridgeHandleMutRefConverter<SignalMutPointerBackupJsonExporter, BackupJsonExporter>.convertArgBorrowed(
+            exporter
+        ) { exporterFfi in
+            try checkError(
+                SignalFfi.signal_backup_json_exporter_finish(
+                    exporterFfi,
+                )
+            )
+        }
+
+    }
+    internal static func BackupJsonExporter_GetInitialChunk(
+        exporter: BackupJsonExporter,
+    ) throws -> String {
+        try BridgeHandleRefConverter<SignalMutPointerBackupJsonExporter, BackupJsonExporter>.convertArgBorrowed(
+            exporter
+        ) { exporterFfi in
+            var rawOutput = StringConverter.emptyFfiReturn()
+            try checkError(
+                SignalFfi.signal_backup_json_exporter_get_initial_chunk(
+                    &rawOutput,
+                    exporterFfi,
+                )
+            )
+            return try StringConverter.convertReturn(consuming: rawOutput)
+        }
 
     }
     internal static func CopyBackupMediaStream_next(
@@ -5193,6 +6621,7 @@ internal enum NativeNice {
         receiptCredentialRequestContext receipt_credential_request_context: ReceiptCredentialRequestContext,
         serverParams server_params: ServerPublicParams,
         purchaseTime purchase_time: Date,
+        expectedLevel expected_level: LoginReceiptLevel,
     ) async throws -> ReceiptCredential {
         let rawOutput: ByteArrayConverter<ReceiptCredential>.FfiReturn =
             try await asyncContext.invokeAsyncFunction {
@@ -5209,20 +6638,93 @@ internal enum NativeNice {
                                     BridgeHandleRefConverter<SignalMutPointerServerPublicParams, ServerPublicParams>
                                         .convertArgBorrowed(server_params) { server_paramsFfi in
                                             TimestampConverter.convertArgBorrowed(purchase_time) { purchase_timeFfi in
-                                                SignalFfi
-                                                    .signal_unauthenticated_chat_connection_create_login_receipt_credential(
-                                                        promiseFfi,
-                                                        asyncContextFfi.const(),
-                                                        chatFfi,
-                                                        payment_processorFfi,
-                                                        purchase_identifierFfi,
-                                                        receipt_credential_request_contextFfi,
-                                                        server_paramsFfi,
-                                                        purchase_timeFfi,
-                                                    )
+                                                DerivedArgConverterLoginReceiptLevel.convertArgBorrowed(expected_level)
+                                                { expected_levelFfi in
+                                                    SignalFfi
+                                                        .signal_unauthenticated_chat_connection_create_login_receipt_credential(
+                                                            promiseFfi,
+                                                            asyncContextFfi.const(),
+                                                            chatFfi,
+                                                            payment_processorFfi,
+                                                            purchase_identifierFfi,
+                                                            receipt_credential_request_contextFfi,
+                                                            server_paramsFfi,
+                                                            purchase_timeFfi,
+                                                            expected_levelFfi,
+                                                        )
+                                                }
                                             }
                                         }
                                 }
+                            }
+                        }
+                    }
+            }
+        return try ByteArrayConverter<ReceiptCredential>.convertReturn(consuming: rawOutput)
+
+    }
+    internal static func UnauthenticatedChatConnection_get_profile_key_credential(
+        asyncContext: TokioAsyncContext,
+        chat: UnauthenticatedChatConnection,
+        profileKeyRequestContext profile_key_request_context: ProfileKeyCredentialRequestContext,
+        serverParams server_params: ServerPublicParams,
+    ) async throws -> ExpiringProfileKeyCredential {
+        let rawOutput: FixedLengthSerializedConverter<ExpiringProfileKeyCredential, FixedByteArrayHelper153>.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerUnauthenticatedChatConnection, UnauthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        FixedLengthSerializedConverter<ProfileKeyCredentialRequestContext, FixedByteArrayHelper473>
+                            .convertArgBorrowed(profile_key_request_context) { profile_key_request_contextFfi in
+                                BridgeHandleRefConverter<SignalMutPointerServerPublicParams, ServerPublicParams>
+                                    .convertArgBorrowed(server_params) { server_paramsFfi in
+                                        SignalFfi.signal_unauthenticated_chat_connection_get_profile_key_credential(
+                                            promiseFfi,
+                                            asyncContextFfi.const(),
+                                            chatFfi,
+                                            profile_key_request_contextFfi,
+                                            server_paramsFfi,
+                                        )
+                                    }
+                            }
+                    }
+            }
+        return try FixedLengthSerializedConverter<ExpiringProfileKeyCredential, FixedByteArrayHelper153>.convertReturn(
+            consuming: rawOutput
+        )
+
+    }
+    internal static func UnauthenticatedChatConnection_get_subscription_receipt_credential(
+        asyncContext: TokioAsyncContext,
+        chat: UnauthenticatedChatConnection,
+        subscriberId subscriber_id: Data,
+        receiptCredentialRequestContext receipt_credential_request_context: ReceiptCredentialRequestContext,
+        serverParams server_params: ServerPublicParams,
+    ) async throws -> ReceiptCredential {
+        let rawOutput: ByteArrayConverter<ReceiptCredential>.FfiReturn =
+            try await asyncContext.invokeAsyncFunction {
+                promiseFfi,
+                asyncContextFfi in
+                BridgeHandleRefConverter<SignalMutPointerUnauthenticatedChatConnection, UnauthenticatedChatConnection>
+                    .convertArgBorrowed(chat) { chatFfi in
+                        FixedByteArrayConverter<FixedByteArrayHelper32>.convertArgBorrowed(subscriber_id) {
+                            subscriber_idFfi in
+                            ByteArrayConverter<ReceiptCredentialRequestContext>.convertArgBorrowed(
+                                receipt_credential_request_context
+                            ) { receipt_credential_request_contextFfi in
+                                BridgeHandleRefConverter<SignalMutPointerServerPublicParams, ServerPublicParams>
+                                    .convertArgBorrowed(server_params) { server_paramsFfi in
+                                        SignalFfi
+                                            .signal_unauthenticated_chat_connection_get_subscription_receipt_credential(
+                                                promiseFfi,
+                                                asyncContextFfi.const(),
+                                                chatFfi,
+                                                subscriber_idFfi,
+                                                receipt_credential_request_contextFfi,
+                                                server_paramsFfi,
+                                            )
+                                    }
                             }
                         }
                     }

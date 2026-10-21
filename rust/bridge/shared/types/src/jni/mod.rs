@@ -33,8 +33,8 @@ use libsignal_net_chat::api::backups::{BackupAuthCredentialRejected, GetUploadFo
 use libsignal_net_chat::api::messages::UploadTooLarge;
 use libsignal_net_chat::api::{RateLimitChallenge, RequestError as ChatRequestError};
 use libsignal_net_chat::grpc::devices::DeviceIdNotFoundInAccount;
-use libsignal_net_chat::grpc::login_purchase::ReceiptCredentialError;
 use libsignal_net_chat::grpc::usernames::UsernameNotAvailable;
+use libsignal_net_chat::grpc::{login_purchase, subscriptions};
 use libsignal_protocol::*;
 use signal_crypto::Error as SignalCryptoError;
 use usernames::{UsernameError, UsernameLinkError};
@@ -114,7 +114,7 @@ macro_rules! jni_custom_spellings {
                 $kt_spelling.to_string()
             }
         }
-        impl<'a> From<$ident<'a>> for ::jni::JValueOwned<'a> {
+        impl<'a> From<$ident<'a>> for ::jni::objects::JObject<'a> {
             fn from(value: $ident<'a>) -> Self {
                 value.0.into()
             }
@@ -369,7 +369,7 @@ impl MessageOnlyExceptionJniError for UploadTooLarge {
     }
 }
 
-impl JniError for ReceiptCredentialError {
+impl JniError for login_purchase::ReceiptCredentialError {
     fn to_throwable_impl<'a>(
         &self,
         env: &mut jni::Env<'a>,
@@ -378,16 +378,16 @@ impl JniError for ReceiptCredentialError {
             env,
             self.to_string(),
             ClassName(match self {
-                ReceiptCredentialError::PaymentStillProcessing => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentStillProcessing"
+                Self::PaymentStillProcessing => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentStillProcessing"
                 }
-                ReceiptCredentialError::PaymentNotFound => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentNotFound"
+                Self::PaymentNotFound => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentNotFound"
                 }
-                ReceiptCredentialError::ReceiptAlreadyIssued => {
-                    "org.signal.libsignal.net.CreateLoginReceiptCredentialException$ReceiptAlreadyIssued"
+                Self::ReceiptAlreadyIssued => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$ReceiptAlreadyIssued"
                 }
-                ReceiptCredentialError::PaymentRequired { charge_failure } => {
+                Self::PaymentRequired { charge_failure } => {
                     let message = new_jstring_from_owned_utf8(env, self.to_string())?;
                     let charge_failure = charge_failure
                         .clone()
@@ -397,7 +397,7 @@ impl JniError for ReceiptCredentialError {
                     return new_instance(
                         env,
                         ClassName(
-                            "org.signal.libsignal.net.CreateLoginReceiptCredentialException$PaymentRequired",
+                            "org.signal.libsignal.net.ReceiptCredentialException$PaymentRequired",
                         ),
                         jni_args!((
                             message => java.lang.String,
@@ -416,10 +416,51 @@ static _FORCE_CHARGE_FAILURE_CONVERTER_TO_BE_EMITTED: crate::metadata::FnWithMod
 > = crate::metadata::FnWithModule {
     module_path: module_path!(),
     apply: |ctx| {
-        use libsignal_net_chat::grpc::login_purchase::ChargeFailure;
+        use libsignal_net_chat::api::purchase::ChargeFailure;
         ChargeFailure::register_kt_result_converter(ctx);
     },
 };
+
+impl JniError for subscriptions::ReceiptCredentialError {
+    fn to_throwable_impl<'a>(
+        &self,
+        env: &mut jni::Env<'a>,
+    ) -> Result<JObject<'a>, BridgeLayerError> {
+        make_single_message_throwable(
+            env,
+            self.to_string(),
+            ClassName(match self {
+                Self::NoPaidInvoice => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentStillProcessing"
+                }
+                Self::SubscriberNotFound => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$PaymentNotFound"
+                }
+                Self::ReceiptAlreadyIssued => {
+                    "org.signal.libsignal.net.ReceiptCredentialException$ReceiptAlreadyIssued"
+                }
+                Self::PaymentRequired { charge_failure } => {
+                    let message = new_jstring_from_owned_utf8(env, self.to_string())?;
+                    let charge_failure = charge_failure
+                        .clone()
+                        .map(|cf| cf.convert_into(env))
+                        .transpose()?
+                        .unwrap_or_default();
+                    return new_instance(
+                        env,
+                        ClassName(
+                            "org.signal.libsignal.net.ReceiptCredentialException$PaymentRequired",
+                        ),
+                        jni_args!((
+                            message => java.lang.String,
+                            charge_failure => org.signal.libsignal.net.ChargeFailure,
+                        ) -> void),
+                    );
+                }
+            }),
+        )
+    }
+}
 
 impl MessageOnlyExceptionJniError for BackupAuthCredentialRejected {
     fn exception_class(&self) -> ClassName<'static> {
@@ -2032,7 +2073,30 @@ impl MessageOnlyExceptionJniError for libsignal_net_chat::grpc::accounts::Confir
     fn exception_class(&self) -> ClassName<'static> {
         match self {
             Self::OneTimePasswordNotVerified => {
-                ClassName("org.signal.libsignal.net.OneTimePasswordNotVerifiedException")
+                ClassName("org.signal.libsignal.net.MfaNotVerifiedException")
+            }
+            Self::TooManyMfaKeys => ClassName("org.signal.libsignal.net.TooManyMfaKeysException"),
+        }
+    }
+}
+
+impl MessageOnlyExceptionJniError
+    for libsignal_net_chat::grpc::accounts::StartWebAuthnRegistrationError
+{
+    fn exception_class(&self) -> ClassName<'static> {
+        match self {
+            Self::TooManyMfaKeys => ClassName("org.signal.libsignal.net.TooManyMfaKeysException"),
+        }
+    }
+}
+
+impl MessageOnlyExceptionJniError
+    for libsignal_net_chat::grpc::accounts::FinishWebAuthnRegistrationError
+{
+    fn exception_class(&self) -> ClassName<'static> {
+        match self {
+            Self::WebAuthnRegistrationUnsuccessful => {
+                ClassName("org.signal.libsignal.net.WebAuthnRegistrationUnsuccessfulException")
             }
             Self::TooManyMfaKeys => ClassName("org.signal.libsignal.net.TooManyMfaKeysException"),
         }
@@ -2045,6 +2109,12 @@ impl MessageOnlyExceptionJniError for libsignal_net_chat::grpc::accounts::MfaKey
     }
 }
 
+impl MessageOnlyExceptionJniError for libsignal_net_chat::grpc::accounts::MfaVerificationFailed {
+    fn exception_class(&self) -> ClassName<'static> {
+        ClassName("org.signal.libsignal.net.MfaNotVerifiedException")
+    }
+}
+
 impl<E: JniError> JniError for crate::support::RequestOrArgumentError<E> {
     fn to_throwable_impl<'a>(
         &self,
@@ -2053,6 +2123,30 @@ impl<E: JniError> JniError for crate::support::RequestOrArgumentError<E> {
         match self {
             Self::Request(e) => e.to_throwable_impl(env),
             Self::Argument(e) => e.to_throwable_impl(env),
+        }
+    }
+}
+
+impl MessageOnlyExceptionJniError
+    for libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError
+{
+    fn exception_class(&self) -> ClassName<'static> {
+        match self {
+            Self::AuthFailed => ClassName("org.signal.libsignal.net.RequestUnauthorizedException"),
+            Self::ProfileNotFound => ClassName("org.signal.libsignal.net.ProfileNotFoundException"),
+        }
+    }
+}
+
+impl MessageOnlyExceptionJniError
+    for libsignal_net_chat::grpc::donations::RedeemDonationReceiptFailure
+{
+    fn exception_class(&self) -> ClassName<'static> {
+        match self {
+            Self::InvalidReceipt => ClassName("org.signal.libsignal.net.InvalidReceiptException"),
+            Self::AlreadyRedeemed => {
+                ClassName("org.signal.libsignal.net.ReceiptAlreadyRedeemedException")
+            }
         }
     }
 }

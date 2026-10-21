@@ -7,14 +7,13 @@ use bytes::Bytes;
 use http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use itertools::Itertools;
 use libsignal_bridge_types::net::TokioAsyncContext;
-#[cfg(any(feature = "ffi", feature = "jni", feature = "node",))]
-use libsignal_bridge_types::net::chat::BridgeDeleteBackupMediaItem;
 use libsignal_bridge_types::net::chat::remote_derives::{
-    CallQualitySurveyInternal, CurrencyConversionsInternal,
+    BridgeMfaVerificationCredential, CallQualitySurveyInternal, CurrencyConversionsInternal,
 };
 use libsignal_bridge_types::net::chat::{
-    AuthenticatedChatConnection, BridgeCopyBackupMediaItem, BridgePreKeyCounts, ChatListener,
-    HttpRequest, ProvisioningChatConnection, ProvisioningListener, UnauthenticatedChatConnection,
+    AuthenticatedChatConnection, BridgeCopyBackupMediaItem, BridgeDeleteBackupMediaItem,
+    BridgePreKeyCounts, ChatListener, HttpRequest, ProvisioningChatConnection,
+    ProvisioningListener, UnauthenticatedChatConnection,
 };
 use libsignal_net::chat::fake::{BodyWithTrailers, FakeChatRemote};
 use libsignal_net::chat::{
@@ -502,16 +501,20 @@ mod remote_derives {
     use ::zkgroup::receipts::{ReceiptCredential, ReceiptCredentialRequestContext};
     use libsignal_bridge_macros::{BridgedAsValue, StructuralFrom};
     use libsignal_bridge_types::net::chat::remote_derives::{
-        GetStickerUploadFormsResponse, ListMediaResponse,
+        AccountEntitlements, GetStickerUploadFormsResponse, ListMediaResponse,
+        StartMfaVerificationResponse,
     };
     use libsignal_bridge_types::net::chat::{
         BridgeConfirmedMfaKey, BridgeCopyBackupMediaOutcome, BridgeDeleteBackupMediaItem,
         BridgeMediaBackupInfo, BridgeMessageBackupInfo, BridgeMfaMetadata, BridgePendingTotpKey,
+        BridgeWebAuthnCreateParameters,
     };
+    use libsignal_core::Aci;
+    use libsignal_net_chat::api::purchase::{ChargeFailure, PaymentProvider};
     use libsignal_net_chat::grpc::devices::{DeviceCapability, LinkedDevice};
-    use libsignal_net_chat::grpc::login_purchase::{
-        ChargeFailure, PaymentProvider, ReceiptCredentialError as ReceiptCredentialErrorReal,
-    };
+    use libsignal_net_chat::grpc::donations::BadgeVisibility;
+    use libsignal_net_chat::grpc::login_purchase::LoginReceiptLevel;
+    use libsignal_net_chat::grpc::{login_purchase, subscriptions};
     use libsignal_protocol::Timestamp;
     use uuid::Uuid;
 
@@ -539,10 +542,11 @@ mod remote_derives {
         pub receipt_credential_request_context: ReceiptCredentialRequestContext,
         pub server_params: ServerPublicParamsSerialized,
         pub purchase_time: Timestamp,
+        pub expected_level: LoginReceiptLevel,
     }
 
     #[derive(BridgedAsValue)]
-    #[bridge(swift_equatable = true)]
+    #[bridge(arg = false, swift_equatable = true)]
     pub enum ReceiptCredentialError {
         /// The purchase is still pending with the payment provider. The client may retry later.
         PaymentStillProcessing,
@@ -558,26 +562,71 @@ mod remote_derives {
         /// credential request
         ReceiptAlreadyIssued,
     }
-    impl From<ReceiptCredentialErrorReal> for ReceiptCredentialError {
-        fn from(value: ReceiptCredentialErrorReal) -> Self {
+    impl From<login_purchase::ReceiptCredentialError> for ReceiptCredentialError {
+        fn from(value: login_purchase::ReceiptCredentialError) -> Self {
             match value {
-                ReceiptCredentialErrorReal::PaymentStillProcessing => Self::PaymentStillProcessing,
-                ReceiptCredentialErrorReal::PaymentRequired { charge_failure } => {
+                login_purchase::ReceiptCredentialError::PaymentStillProcessing => {
+                    Self::PaymentStillProcessing
+                }
+                login_purchase::ReceiptCredentialError::PaymentRequired { charge_failure } => {
                     Self::PaymentRequired {
                         charge_failure: BridgeVec(charge_failure.map(|x| *x).into_iter().collect()),
                     }
                 }
-                ReceiptCredentialErrorReal::PaymentNotFound => Self::PaymentNotFound,
-                ReceiptCredentialErrorReal::ReceiptAlreadyIssued => Self::ReceiptAlreadyIssued,
+                login_purchase::ReceiptCredentialError::PaymentNotFound => Self::PaymentNotFound,
+                login_purchase::ReceiptCredentialError::ReceiptAlreadyIssued => {
+                    Self::ReceiptAlreadyIssued
+                }
             }
         }
     }
+    // These don't map exactly, but we reuse the errors on the app language side too.
+    impl From<subscriptions::ReceiptCredentialError> for ReceiptCredentialError {
+        fn from(value: subscriptions::ReceiptCredentialError) -> Self {
+            match value {
+                subscriptions::ReceiptCredentialError::NoPaidInvoice => {
+                    Self::PaymentStillProcessing
+                }
+                subscriptions::ReceiptCredentialError::PaymentRequired { charge_failure } => {
+                    Self::PaymentRequired {
+                        charge_failure: BridgeVec(charge_failure.map(|x| *x).into_iter().collect()),
+                    }
+                }
+                subscriptions::ReceiptCredentialError::SubscriberNotFound => Self::PaymentNotFound,
+                subscriptions::ReceiptCredentialError::ReceiptAlreadyIssued => {
+                    Self::ReceiptAlreadyIssued
+                }
+            }
+        }
+    }
+
     #[allow(clippy::large_enum_variant)]
     #[derive(BridgedAsValue, StructuralFrom)]
     #[structural_from(
         libsignal_net_chat::grpc::login_purchase::test_cases::CreateLoginReceiptCredentialOut
     )]
+    #[bridge(arg = false)]
     pub enum CreateLoginReceiptCredentialOut {
+        Success(ReceiptCredential),
+        UnexpectedError { contains: String },
+        ExplicitError(ReceiptCredentialError),
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(
+        libsignal_net_chat::grpc::subscriptions::test_cases::GetReceiptCredentialArgs
+    )]
+    pub struct GetSubscriptionReceiptCredentialArgs {
+        pub subscriber_id: Vec<u8>,
+        pub receipt_credential_request_context: ReceiptCredentialRequestContext,
+        pub server_params: ServerPublicParamsSerialized,
+    }
+
+    #[allow(clippy::large_enum_variant)]
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::subscriptions::test_cases::GetReceiptCredentialOut)]
+    #[bridge(arg = false)]
+    pub enum GetSubscriptionReceiptCredentialOut {
         Success(ReceiptCredential),
         UnexpectedError { contains: String },
         ExplicitError(ReceiptCredentialError),
@@ -849,6 +898,70 @@ mod remote_derives {
     }
 
     #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::StartWebAuthnRegistrationOut)]
+    #[bridge(arg = false)]
+    pub(super) enum StartWebAuthnRegistrationOut {
+        Success(BridgeWebAuthnCreateParameters),
+        TooManyMfaKeys,
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) struct FinishWebAuthnRegistrationArgs {
+        pub attestation_object: Vec<u8>,
+        pub collected_client_data_json: String,
+        pub name: String,
+        pub created_at: Timestamp,
+        pub svr_key: [u8; 32],
+    }
+    impl From<libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationArgs>
+        for FinishWebAuthnRegistrationArgs
+    {
+        fn from(
+            value: libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationArgs,
+        ) -> Self {
+            let libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationArgs {
+                attestation_object,
+                collected_client_data_json,
+                metadata,
+                svr_key,
+            } = value;
+            let BridgeMfaMetadata { name, created_at } = metadata.into();
+            Self {
+                attestation_object,
+                collected_client_data_json,
+                name,
+                created_at,
+                svr_key,
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) enum FinishWebAuthnRegistrationOut {
+        Success(i32),
+        WebAuthnRegistrationUnsuccessful,
+        TooManyMfaKeys,
+    }
+    impl From<libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationOut>
+        for FinishWebAuthnRegistrationOut
+    {
+        fn from(
+            value: libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationOut,
+        ) -> Self {
+            use libsignal_net_chat::grpc::accounts::test_cases::FinishWebAuthnRegistrationOut as Remote;
+            match value {
+                Remote::Success(key_id) => {
+                    Self::Success(u32::from(key_id).try_into().expect("key IDs are small"))
+                }
+                Remote::WebAuthnRegistrationUnsuccessful => Self::WebAuthnRegistrationUnsuccessful,
+                Remote::TooManyMfaKeys => Self::TooManyMfaKeys,
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
     #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::ListMfaKeysArgs)]
     #[bridge(arg = false)]
     pub(super) struct ListMfaKeysArgs {
@@ -930,6 +1043,218 @@ mod remote_derives {
     #[bridge(arg = false)]
     pub(super) enum RemoveMfaKeyOut {
         Success,
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) struct SetOneTimeEcPreKeysArgs {
+        pub identity: u8,
+        pub pre_keys: BridgeVec<(i32, Vec<u8>)>,
+    }
+
+    impl From<libsignal_net_chat::grpc::keys::test_cases::SetOneTimeEcPreKeysArgs>
+        for SetOneTimeEcPreKeysArgs
+    {
+        fn from(
+            value: libsignal_net_chat::grpc::keys::test_cases::SetOneTimeEcPreKeysArgs,
+        ) -> Self {
+            Self {
+                identity: value.identity.into(),
+                pre_keys: value
+                    .pre_keys
+                    .into_iter()
+                    .map(|(id, key)| {
+                        (
+                            i32::try_from(u32::from(id)).expect("pre-key IDs fit in i32"),
+                            key.serialize().into_vec(),
+                        )
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue)]
+    struct TestingAnySignedPreKey {
+        id: i32,
+        key: Vec<u8>,
+        sig: Vec<u8>,
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) struct SetOneTimeKemPreKeysArgs {
+        identity: u8,
+        pre_keys: BridgeVec<TestingAnySignedPreKey>,
+    }
+
+    impl From<libsignal_net_chat::grpc::keys::test_cases::SetOneTimeKemPreKeysArgs>
+        for SetOneTimeKemPreKeysArgs
+    {
+        fn from(
+            value: libsignal_net_chat::grpc::keys::test_cases::SetOneTimeKemPreKeysArgs,
+        ) -> Self {
+            Self {
+                identity: value.identity.into(),
+                pre_keys: value
+                    .pre_keys
+                    .into_iter()
+                    .map(|(id, key, sig)| TestingAnySignedPreKey {
+                        id: i32::try_from(u32::from(id)).expect("pre-key IDs fit in i32"),
+                        key: key.serialize().into_vec(),
+                        sig: sig.into_vec(),
+                    })
+                    .collect(),
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) struct SetSignedEcPreKeyArgs {
+        identity: u8,
+        pre_key: TestingAnySignedPreKey,
+    }
+
+    impl From<libsignal_net_chat::grpc::keys::test_cases::SetSignedEcPreKeyArgs>
+        for SetSignedEcPreKeyArgs
+    {
+        fn from(value: libsignal_net_chat::grpc::keys::test_cases::SetSignedEcPreKeyArgs) -> Self {
+            let (id, key, sig) = value.pre_key;
+            Self {
+                identity: value.identity.into(),
+                pre_key: TestingAnySignedPreKey {
+                    id: i32::try_from(u32::from(id)).expect("pre-key IDs fit in i32"),
+                    key: key.serialize().into_vec(),
+                    sig: sig.into_vec(),
+                },
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue)]
+    #[bridge(arg = false)]
+    pub(super) struct SetLastResortKemPreKeyArgs {
+        identity: u8,
+        pre_key: TestingAnySignedPreKey,
+    }
+
+    impl From<libsignal_net_chat::grpc::keys::test_cases::SetLastResortKemPreKeyArgs>
+        for SetLastResortKemPreKeyArgs
+    {
+        fn from(
+            value: libsignal_net_chat::grpc::keys::test_cases::SetLastResortKemPreKeyArgs,
+        ) -> Self {
+            let (id, key, sig) = value.pre_key;
+            Self {
+                identity: value.identity.into(),
+                pre_key: TestingAnySignedPreKey {
+                    id: i32::try_from(u32::from(id)).expect("pre-key IDs fit in i32"),
+                    key: key.serialize().into_vec(),
+                    sig: sig.into_vec(),
+                },
+            }
+        }
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::StartMfaVerificationOut)]
+    #[bridge(arg = false)]
+    pub enum StartMfaVerificationOut {
+        Success(StartMfaVerificationResponse),
+        Malformed,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::FinishMfaVerificationOut)]
+    #[bridge(arg = false)]
+    pub enum FinishMfaVerificationOut {
+        Success,
+        FailedToVerify,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::profiles::test_cases::GetProfileKeyCredentialArgs)]
+    #[bridge(arg = false)]
+    pub struct GetProfileKeyCredentialArgs {
+        profile_key_request_context:
+            Serialized<::zkgroup::profiles::ProfileKeyCredentialRequestContext>,
+        server_params: ServerPublicParamsSerialized,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::api::profiles::ProfileKeyCredentialRequestError)]
+    #[bridge(arg = false, swift_equatable = true)]
+    pub enum ProfileKeyCredentialRequestError {
+        AuthFailed,
+        ProfileNotFound,
+    }
+    #[allow(clippy::large_enum_variant)]
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::profiles::test_cases::GetProfileKeyCredentialOut)]
+    #[bridge(arg = false)]
+    pub enum GetProfileKeyCredentialOut {
+        Success(Serialized<::zkgroup::profiles::ExpiringProfileKeyCredential>),
+        UnexpectedError { contains: String },
+        ExplicitError(ProfileKeyCredentialRequestError),
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::messages::test_cases::ReportMessageArgs)]
+    pub(super) struct ReportMessageArgs {
+        source: Aci,
+        message_guid: Uuid,
+        report_spam_token: Vec<u8>,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::donations::test_cases::CreateDonationPermitsArgs)]
+    #[bridge(arg = false)]
+    pub struct CreateDonationPermitsArgs {
+        request_context: ::zkgroup::donations::DonationPermitRequestContext,
+        server_params: ServerPublicParamsSerialized,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::donations::test_cases::CreateDonationPermitsOut)]
+    #[bridge(arg = false)]
+    pub enum CreateDonationPermitsOut {
+        Success(BridgeVec<::zkgroup::donations::DonationPermit>),
+        UnexpectedError { contains: String },
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::donations::test_cases::RedeemDonationReceiptArgs)]
+    #[bridge(arg = false)]
+    pub struct RedeemDonationReceiptArgs {
+        presentation: Serialized<::zkgroup::receipts::ReceiptCredentialPresentation>,
+        visibility: BadgeVisibility,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::donations::test_cases::RedeemDonationReceiptOut)]
+    #[bridge(arg = false)]
+    pub enum RedeemDonationReceiptOut {
+        Success,
+        InvalidReceipt,
+        AlreadyRedeemed,
+        UnexpectedError { contains: String },
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::GetEntitlementsOut)]
+    #[bridge(arg = false)]
+    pub enum GetEntitlementsOut {
+        Success(AccountEntitlements),
+        Malformed,
+    }
+
+    #[derive(BridgedAsValue, StructuralFrom)]
+    #[structural_from(libsignal_net_chat::grpc::accounts::test_cases::GetCapabilitiesOut)]
+    #[bridge(arg = false)]
+    pub enum GetCapabilitiesOut {
+        Success(BridgeVec<DeviceCapability>),
+        Malformed,
     }
 }
 
@@ -1021,6 +1346,19 @@ fn TESTING_GenerateTotpKeyTests() -> GrpcTestCases<(), remote_derives::GenerateT
 fn TESTING_ConfirmTotpKeyTests()
 -> GrpcTestCases<remote_derives::ConfirmTotpKeyArgs, remote_derives::ConfirmTotpKeyOut> {
     libsignal_net_chat::grpc::accounts::test_cases::confirm_totp_key_test_cases().into()
+}
+#[bridge_fn(nice = true)]
+fn TESTING_StartWebAuthnRegistrationTests()
+-> GrpcTestCases<(), remote_derives::StartWebAuthnRegistrationOut> {
+    libsignal_net_chat::grpc::accounts::test_cases::start_web_authn_registration_test_cases().into()
+}
+#[bridge_fn(nice = true)]
+fn TESTING_FinishWebAuthnRegistrationTests() -> GrpcTestCases<
+    remote_derives::FinishWebAuthnRegistrationArgs,
+    remote_derives::FinishWebAuthnRegistrationOut,
+> {
+    libsignal_net_chat::grpc::accounts::test_cases::finish_web_authn_registration_test_cases()
+        .into()
 }
 #[bridge_fn(nice = true)]
 fn TESTING_ListMfaKeysTests()
@@ -1175,4 +1513,86 @@ fn TESTING_GetStickerUploadFormTests()
             .into_iter()
             .map(|next| next.map_request(|count| i32::try_from(count).expect("count fits in i32"))),
     )
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_SetOneTimeEcPreKeysTests() -> GrpcTestCases<remote_derives::SetOneTimeEcPreKeysArgs, ()>
+{
+    libsignal_net_chat::grpc::keys::test_cases::set_one_time_ec_pre_keys_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_SetOneTimeKemPreKeysTests() -> GrpcTestCases<remote_derives::SetOneTimeKemPreKeysArgs, ()>
+{
+    libsignal_net_chat::grpc::keys::test_cases::set_one_time_kem_pre_keys_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_SetSignedEcPreKeyTests() -> GrpcTestCases<remote_derives::SetSignedEcPreKeyArgs, ()> {
+    libsignal_net_chat::grpc::keys::test_cases::set_signed_ec_pre_key_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_SetLastResortKemPreKeyTests()
+-> GrpcTestCases<remote_derives::SetLastResortKemPreKeyArgs, ()> {
+    libsignal_net_chat::grpc::keys::test_cases::set_last_resort_kem_pre_key_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_StartMfaVerificationTests() -> GrpcTestCases<(), remote_derives::StartMfaVerificationOut>
+{
+    libsignal_net_chat::grpc::accounts::test_cases::start_mfa_verification_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_FinishMfaVerificationTests()
+-> GrpcTestCases<BridgeMfaVerificationCredential, remote_derives::FinishMfaVerificationOut> {
+    libsignal_net_chat::grpc::accounts::test_cases::finish_mfa_verification_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetProfileKeyCredentialTests() -> GrpcTestCases<
+    remote_derives::GetProfileKeyCredentialArgs,
+    remote_derives::GetProfileKeyCredentialOut,
+> {
+    libsignal_net_chat::grpc::profiles::test_cases::get_profile_key_credential_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_ReportMessageTests() -> GrpcTestCases<remote_derives::ReportMessageArgs, ()> {
+    libsignal_net_chat::grpc::messages::test_cases::report_message_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetSubscriptionReceiptCredentialTests() -> GrpcTestCases<
+    remote_derives::GetSubscriptionReceiptCredentialArgs,
+    remote_derives::GetSubscriptionReceiptCredentialOut,
+> {
+    libsignal_net_chat::grpc::subscriptions::test_cases::get_receipt_credential_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_CreateDonationPermitsTests() -> GrpcTestCases<
+    remote_derives::CreateDonationPermitsArgs,
+    remote_derives::CreateDonationPermitsOut,
+> {
+    libsignal_net_chat::grpc::donations::test_cases::create_donation_permits_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_RedeemDonationReceiptTests() -> GrpcTestCases<
+    remote_derives::RedeemDonationReceiptArgs,
+    remote_derives::RedeemDonationReceiptOut,
+> {
+    libsignal_net_chat::grpc::donations::test_cases::redeem_donation_receipt_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetEntitlementsTests() -> GrpcTestCases<(), remote_derives::GetEntitlementsOut> {
+    libsignal_net_chat::grpc::accounts::test_cases::get_entitlements_test_cases().into()
+}
+
+#[bridge_fn(nice = true)]
+fn TESTING_GetCapabilitiesTests() -> GrpcTestCases<(), remote_derives::GetCapabilitiesOut> {
+    libsignal_net_chat::grpc::accounts::test_cases::get_capabilities_test_cases().into()
 }

@@ -25,6 +25,16 @@ import org.signal.libsignal.internal.NativeNiceHelpers.mapBridgeVecReturn
 import org.signal.libsignal.internal.NativeNiceHelpers.mapPair
 
 /*
+// org.signal.libsignal.net.AccountEntitlements
+
+public data class AccountEntitlements(
+  public val badges: List<org.signal.libsignal.net.BadgeEntitlement>,
+  public val backup: org.signal.libsignal.net.BackupEntitlement?,
+)
+
+*/
+
+/*
 // org.signal.libsignal.net.AuthCheckResult
 
 public sealed class AuthCheckResult {
@@ -33,6 +43,40 @@ public sealed class AuthCheckResult {
   public data object NoMatch : AuthCheckResult()
 
   public data object Invalid : AuthCheckResult()
+}
+
+*/
+
+/*
+// org.signal.libsignal.net.BackupEntitlement
+
+public data class BackupEntitlement(
+  public val level: Long,
+  public val expiration: java.time.Instant,
+)
+
+*/
+
+/*
+// org.signal.libsignal.net.BadgeEntitlement
+
+public data class BadgeEntitlement(
+  public val badgeId: String,
+  public val expiration: java.time.Instant,
+  public val visible: Boolean,
+)
+
+*/
+
+/*
+// org.signal.libsignal.net.BadgeVisibility
+
+public sealed class BadgeVisibility {
+  public data object DoNotSet : BadgeVisibility()
+
+  public data object SetVisible : BadgeVisibility()
+
+  public data object SetPrimary : BadgeVisibility()
 }
 
 */
@@ -116,6 +160,8 @@ public data class BridgeMessageBackupInfo(
 public sealed class BridgeMfaKeyKind {
   public data object Totp : BridgeMfaKeyKind()
 
+  public data object WebAuthn : BridgeMfaKeyKind()
+
   public data object Unknown : BridgeMfaKeyKind()
 }
 
@@ -123,6 +169,21 @@ public data class BridgeMfaMetadata(
   public val name: String,
   public val createdAt: java.time.Instant,
 )
+
+/*
+// org.signal.libsignal.net.MfaVerificationCredential
+
+public sealed class BridgeMfaVerificationCredential {
+  public data class Totp(
+    public val password: Int,
+  ) : BridgeMfaVerificationCredential()
+
+  public data class WebAuthn(
+    public val json: String,
+  ) : BridgeMfaVerificationCredential()
+}
+
+*/
 
 public data class BridgePendingTotpKey(
   public val key: ByteArray,
@@ -145,6 +206,23 @@ public data class BridgeTotpParameters(
   public val algorithm: String,
   public val passwordLength: Int,
   public val timeStepSeconds: Int,
+)
+
+/*
+// org.signal.libsignal.net.WebAuthnAuthenticationParameters
+
+public data class BridgeWebAuthnAuthenticationParameters(
+  public val challenge: ByteArray,
+  public val timeoutSeconds: Int,
+  public val allowedCredentialIds: List<ByteArray>,
+)
+
+*/
+
+public data class BridgeWebAuthnCreateParameters(
+  public val userHandle: ByteArray,
+  public val allowedAlgorithms: List<Int>,
+  public val excludeCredentialIds: List<ByteArray>,
 )
 
 /*
@@ -275,6 +353,17 @@ public data class ListMediaResponse(
 */
 
 /*
+// org.signal.libsignal.net.LoginReceiptLevel
+
+public sealed class LoginReceiptLevel {
+  public data object Normal : LoginReceiptLevel()
+
+  public data object Sandbox : LoginReceiptLevel()
+}
+
+*/
+
+/*
 // org.signal.libsignal.net.PaymentProvider
 
 public sealed class PaymentProvider {
@@ -304,6 +393,38 @@ public data class S3UploadFormInternal(
 
 */
 
+/*
+// org.signal.libsignal.net.StartMfaVerificationResponse
+
+public data class StartMfaVerificationResponse(
+  public val hasTotp: Boolean,
+  public val webauthnParams: org.signal.libsignal.net.WebAuthnAuthenticationParameters?,
+)
+
+*/
+
+public object AccountEntitlements_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    badges: Any?,
+    backup: Any?,
+  ): Any? =
+    org.signal.libsignal.net.AccountEntitlements(
+      badges =
+        mapBridgeVecReturn<Object, org.signal.libsignal.net.BadgeEntitlement>({
+          downcastFromObject<org.signal.libsignal.net.BadgeEntitlement>(it)
+        })(badges as Array<*>),
+      backup =
+        (
+          { x: Object? ->
+            x?.let { downcastFromObject<org.signal.libsignal.net.BackupEntitlement>(it) }
+          }
+        )(backup as Object?),
+    )
+}
+
 public object AuthCheckResult_Match_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -323,6 +444,41 @@ public object AuthCheckResult_Invalid_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = org.signal.libsignal.net.AuthCheckResult.Invalid
+}
+
+public object BackupEntitlement_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    level: Any?,
+    expiration: Any?,
+  ): Any? =
+    org.signal.libsignal.net.BackupEntitlement(
+      level =
+        identity(level as Long),
+      expiration =
+        (java.time.Instant::ofEpochMilli)(expiration as Long),
+    )
+}
+
+public object BadgeEntitlement_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    badge_id: Any?,
+    expiration: Any?,
+    visible: Any?,
+  ): Any? =
+    org.signal.libsignal.net.BadgeEntitlement(
+      badgeId =
+        identity(badge_id as String),
+      expiration =
+        (java.time.Instant::ofEpochMilli)(expiration as Long),
+      visible =
+        identity(visible as Boolean),
+    )
 }
 
 public object BridgeConfirmedMfaKey_ReturnConverter {
@@ -471,6 +627,13 @@ public object BridgeMfaKeyKind_Totp_ReturnConverter {
   internal fun fromNative(): Any? = BridgeMfaKeyKind.Totp
 }
 
+public object BridgeMfaKeyKind_WebAuthn_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = BridgeMfaKeyKind.WebAuthn
+}
+
 public object BridgeMfaKeyKind_Unknown_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -551,6 +714,44 @@ public object BridgeTotpParameters_ReturnConverter {
     )
 }
 
+public object BridgeWebAuthnAuthenticationParameters_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    challenge: Any?,
+    timeout_seconds: Any?,
+    allowed_credential_ids: Any?,
+  ): Any? =
+    org.signal.libsignal.net.WebAuthnAuthenticationParameters(
+      challenge =
+        identity(challenge as ByteArray),
+      timeoutSeconds =
+        identity(timeout_seconds as Int),
+      allowedCredentialIds =
+        mapBridgeVecReturn<ByteArray, ByteArray>({ identity(it) })(allowed_credential_ids as Array<*>),
+    )
+}
+
+public object BridgeWebAuthnCreateParameters_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    user_handle: Any?,
+    allowed_algorithms: Any?,
+    exclude_credential_ids: Any?,
+  ): Any? =
+    BridgeWebAuthnCreateParameters(
+      userHandle =
+        identity(user_handle as ByteArray),
+      allowedAlgorithms =
+        mapBridgeVecReturn<Int, Int>({ identity(it) })(allowed_algorithms as Array<*>),
+      excludeCredentialIds =
+        mapBridgeVecReturn<ByteArray, ByteArray>({ identity(it) })(exclude_credential_ids as Array<*>),
+    )
+}
+
 public object ChargeFailure_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -571,11 +772,11 @@ public object ChargeFailure_ReturnConverter {
       message =
         identity(message as String),
       outcomeNetworkStatus =
-        identity(outcome_network_status as String?),
+        ({ x: String? -> x?.let { identity(it) } })(outcome_network_status as String?),
       outcomeReason =
-        identity(outcome_reason as String?),
+        ({ x: String? -> x?.let { identity(it) } })(outcome_reason as String?),
       outcomeType =
-        identity(outcome_type as String?),
+        ({ x: String? -> x?.let { identity(it) } })(outcome_type as String?),
     )
 }
 
@@ -649,6 +850,55 @@ public object DeleteBackupMediaNextChunk_ReturnConverter {
       termination =
         identity(termination as Object?),
     )
+}
+
+public object DeviceCapabilityInternal_Storage_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.Storage
+}
+
+public object DeviceCapabilityInternal_Transfer_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.Transfer
+}
+
+public object DeviceCapabilityInternal_AttachmentBackfill_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.AttachmentBackfill
+}
+
+public object DeviceCapabilityInternal_SparsePostQuantumRatchet_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.SparsePostQuantumRatchet
+}
+
+public object DeviceCapabilityInternal_ProfilesV2_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.ProfilesV2
+}
+
+public object DeviceCapabilityInternal_UsernameChangeSyncMessage_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.UsernameChangeSyncMessage
+}
+
+public object DeviceCapabilityInternal_OptionalPhoneNumber_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = DeviceCapabilityInternal.OptionalPhoneNumber
 }
 
 public object GetStickerUploadFormsResponse_ReturnConverter {
@@ -736,7 +986,7 @@ public object ListMediaResponse_ReturnConverter {
       mediaDir =
         identity(media_dir as String),
       cursor =
-        identity(cursor as String?),
+        ({ x: String? -> x?.let { identity(it) } })(cursor as String?),
     )
 }
 
@@ -798,6 +1048,55 @@ public object S3UploadFormInternal_ReturnConverter {
         identity(signature as String),
     )
 }
+
+public object StartMfaVerificationResponse_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    has_totp: Any?,
+    webauthn_params: Any?,
+  ): Any? =
+    org.signal.libsignal.net.StartMfaVerificationResponse(
+      hasTotp =
+        identity(has_totp as Boolean),
+      webauthnParams =
+        (
+          { x: Object? ->
+            x?.let { downcastFromObject<org.signal.libsignal.net.WebAuthnAuthenticationParameters>(it) }
+          }
+        )(webauthn_params as Object?),
+    )
+}
+
+public sealed class BadgeVisibility_FfiArgType
+
+@CalledFromNative
+public object BadgeVisibility_DoNotSet_FfiArgType : BadgeVisibility_FfiArgType()
+
+public fun org.signal.libsignal.net.BadgeVisibility.DoNotSet.toFfiArgType(): BadgeVisibility_DoNotSet_FfiArgType =
+  BadgeVisibility_DoNotSet_FfiArgType
+
+@CalledFromNative
+public object BadgeVisibility_SetVisible_FfiArgType : BadgeVisibility_FfiArgType()
+
+public fun org.signal.libsignal.net.BadgeVisibility.SetVisible.toFfiArgType(): BadgeVisibility_SetVisible_FfiArgType =
+  BadgeVisibility_SetVisible_FfiArgType
+
+@CalledFromNative
+public object BadgeVisibility_SetPrimary_FfiArgType : BadgeVisibility_FfiArgType()
+
+public fun org.signal.libsignal.net.BadgeVisibility.SetPrimary.toFfiArgType(): BadgeVisibility_SetPrimary_FfiArgType =
+  BadgeVisibility_SetPrimary_FfiArgType
+
+public fun org.signal.libsignal.net.BadgeVisibility.toFfiArgTypeObject(): Object =
+  convertToObject(
+    when (this) {
+      is org.signal.libsignal.net.BadgeVisibility.DoNotSet -> this.toFfiArgType()
+      is org.signal.libsignal.net.BadgeVisibility.SetVisible -> this.toFfiArgType()
+      is org.signal.libsignal.net.BadgeVisibility.SetPrimary -> this.toFfiArgType()
+    },
+  )
 
 @CalledFromNative
 @Suppress("ktlint:standard:backing-property-naming")
@@ -868,6 +1167,50 @@ public fun org.signal.libsignal.net.DeleteBackupMediaItem.toFfiArgType(): Bridge
 
 public fun org.signal.libsignal.net.DeleteBackupMediaItem.toFfiArgTypeObject(): Object =
   convertToObject(this.toFfiArgType())
+
+public sealed class BridgeMfaVerificationCredential_FfiArgType
+
+@CalledFromNative
+@Suppress("ktlint:standard:backing-property-naming")
+public class BridgeMfaVerificationCredential_Totp_FfiArgType : BridgeMfaVerificationCredential_FfiArgType {
+  @CalledFromNative
+  internal val password: Int
+  internal constructor(
+    password: Int,
+  ) {
+    this.password = password
+  }
+}
+
+public fun org.signal.libsignal.net.MfaVerificationCredential.Totp.toFfiArgType(): BridgeMfaVerificationCredential_Totp_FfiArgType =
+  BridgeMfaVerificationCredential_Totp_FfiArgType(
+    password = identity(password),
+  )
+
+@CalledFromNative
+@Suppress("ktlint:standard:backing-property-naming")
+public class BridgeMfaVerificationCredential_WebAuthn_FfiArgType : BridgeMfaVerificationCredential_FfiArgType {
+  @CalledFromNative
+  internal val json: Any?
+  internal constructor(
+    json: Any?,
+  ) {
+    this.json = json
+  }
+}
+
+public fun org.signal.libsignal.net.MfaVerificationCredential.WebAuthn.toFfiArgType(): BridgeMfaVerificationCredential_WebAuthn_FfiArgType =
+  BridgeMfaVerificationCredential_WebAuthn_FfiArgType(
+    json = identity(json),
+  )
+
+public fun org.signal.libsignal.net.MfaVerificationCredential.toFfiArgTypeObject(): Object =
+  convertToObject(
+    when (this) {
+      is org.signal.libsignal.net.MfaVerificationCredential.Totp -> this.toFfiArgType()
+      is org.signal.libsignal.net.MfaVerificationCredential.WebAuthn -> this.toFfiArgType()
+    },
+  )
 
 @CalledFromNative
 @Suppress("ktlint:standard:backing-property-naming")
@@ -1075,6 +1418,28 @@ public fun DeviceCapabilityInternal.toFfiArgTypeObject(): Object =
     },
   )
 
+public sealed class LoginReceiptLevel_FfiArgType
+
+@CalledFromNative
+public object LoginReceiptLevel_Normal_FfiArgType : LoginReceiptLevel_FfiArgType()
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.Normal.toFfiArgType(): LoginReceiptLevel_Normal_FfiArgType =
+  LoginReceiptLevel_Normal_FfiArgType
+
+@CalledFromNative
+public object LoginReceiptLevel_Sandbox_FfiArgType : LoginReceiptLevel_FfiArgType()
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.Sandbox.toFfiArgType(): LoginReceiptLevel_Sandbox_FfiArgType =
+  LoginReceiptLevel_Sandbox_FfiArgType
+
+public fun org.signal.libsignal.net.LoginReceiptLevel.toFfiArgTypeObject(): Object =
+  convertToObject(
+    when (this) {
+      is org.signal.libsignal.net.LoginReceiptLevel.Normal -> this.toFfiArgType()
+      is org.signal.libsignal.net.LoginReceiptLevel.Sandbox -> this.toFfiArgType()
+    },
+  )
+
 public sealed class PaymentProvider_FfiArgType
 
 @CalledFromNative
@@ -1204,6 +1569,41 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_create_donation_permits(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    requestContext: org.signal.libsignal.zkgroup.donation.DonationPermitRequestContext,
+    serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
+  ): CompletableFuture<List<org.signal.libsignal.zkgroup.donation.DonationPermit>> {
+    val ffi_chat = identity(chat)
+    val ffi_request_context =
+      (org.signal.libsignal.zkgroup.donation.DonationPermitRequestContext::getInternalContentsForJNI)(
+        requestContext,
+      )
+    val ffi_server_params = identity(serverParams)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_create_donation_permits(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_request_context,
+          ffi_server_params,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        mapBridgeVecReturn<ByteArray, org.signal.libsignal.zkgroup.donation.DonationPermit>({
+          (
+            { x: ByteArray ->
+              org.signal.libsignal.zkgroup.donation
+                .DonationPermit(x)
+            }
+          )(it)
+        })(it)
+      }
+  }
+
   public fun AuthenticatedChatConnection_delete_account(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,
@@ -1252,6 +1652,61 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_finish_mfa_verification(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    credential: org.signal.libsignal.net.MfaVerificationCredential,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_credential = (org.signal.libsignal.net.MfaVerificationCredential::toFfiArgTypeObject)(credential)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_finish_mfa_verification(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_credential,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
+  public fun AuthenticatedChatConnection_finish_web_authn_registration(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    attestationObject: ByteArray,
+    collectedClientDataJson: String,
+    name: String,
+    createdAt: java.time.Instant,
+    svrKey: ByteArray,
+    rng: org.signal.libsignal.net.DeterministicRandomSeedUseOnlyForTesting?,
+  ): CompletableFuture<Int> {
+    val ffi_chat = identity(chat)
+    val ffi_attestation_object = identity(attestationObject)
+    val ffi_collected_client_data_json = identity(collectedClientDataJson)
+    val ffi_name = identity(name)
+    val ffi_created_at = (java.time.Instant::toEpochMilli)(createdAt)
+    val ffi_svr_key = identity(svrKey)
+    val ffi_rng =
+      org.signal.libsignal.net.DeterministicRandomSeedUseOnlyForTesting
+        .toFfi(rng)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_finish_web_authn_registration(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_attestation_object,
+          ffi_collected_client_data_json,
+          ffi_name,
+          ffi_created_at,
+          ffi_svr_key,
+          ffi_rng,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
   public fun AuthenticatedChatConnection_generate_totp_key(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,
@@ -1267,6 +1722,27 @@ public object NativeNice {
     return ffiOut
       .makeCancelable(asyncCtx)
       .thenApply { downcastFromObject<org.signal.libsignal.internal.BridgePendingTotpKey>(it) }
+  }
+
+  public fun AuthenticatedChatConnection_get_capabilities(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+  ): CompletableFuture<List<org.signal.libsignal.internal.DeviceCapabilityInternal>> {
+    val ffi_chat = identity(chat)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_get_capabilities(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        mapBridgeVecReturn<Object, org.signal.libsignal.internal.DeviceCapabilityInternal>({
+          downcastFromObject<org.signal.libsignal.internal.DeviceCapabilityInternal>(it)
+        })(it)
+      }
   }
 
   public fun AuthenticatedChatConnection_get_currency_conversions(
@@ -1305,6 +1781,23 @@ public object NativeNice {
           downcastFromObject<org.signal.libsignal.net.LinkedDevice>(it)
         })(it)
       }
+  }
+
+  public fun AuthenticatedChatConnection_get_entitlements(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+  ): CompletableFuture<org.signal.libsignal.net.AccountEntitlements> {
+    val ffi_chat = identity(chat)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_get_entitlements(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply { downcastFromObject<org.signal.libsignal.net.AccountEntitlements>(it) }
   }
 
   public fun AuthenticatedChatConnection_get_pre_key_count(
@@ -1388,6 +1881,29 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_redeem_donation_receipt(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    presentation: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialPresentation,
+    visibility: org.signal.libsignal.net.BadgeVisibility,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_presentation =
+      (org.signal.libsignal.zkgroup.internal.ByteArray::getInternalContentsForJNI)(presentation)
+    val ffi_visibility = (org.signal.libsignal.net.BadgeVisibility::toFfiArgTypeObject)(visibility)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_redeem_donation_receipt(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_presentation,
+          ffi_visibility,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
   public fun AuthenticatedChatConnection_remove_device(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,
@@ -1420,6 +1936,31 @@ public object NativeNice {
           asyncCtxHandle.nativeHandle(),
           ffi_chat,
           ffi_key_id,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
+  public fun AuthenticatedChatConnection_report_message(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    source: org.signal.libsignal.protocol.ServiceId.Aci,
+    messageGuid: java.util.UUID,
+    reportSpamToken: ByteArray,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_source = (org.signal.libsignal.protocol.ServiceId.Aci::toServiceIdFixedWidthBinary)(source)
+    val ffi_message_guid = identity(messageGuid)
+    val ffi_report_spam_token = identity(reportSpamToken)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_report_message(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_source,
+          ffi_message_guid,
+          ffi_report_spam_token,
         )
       }
     return ffiOut
@@ -1508,6 +2049,34 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_set_last_resort_kem_pre_key(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    identityType: org.signal.libsignal.protocol.ServiceId.Kind,
+    id: Int,
+    key: org.signal.libsignal.protocol.kem.KEMPublicKey,
+    signature: ByteArray,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_identity_type = (org.signal.libsignal.protocol.ServiceId.Kind::ordinal)(identityType)
+    val ffi_id = identity(id)
+    val ffi_key = identity(key)
+    val ffi_signature = identity(signature)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_set_last_resort_kem_pre_key(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_identity_type,
+          ffi_id,
+          ffi_key,
+          ffi_signature,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
   public fun AuthenticatedChatConnection_set_mfa_key_metadata(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,
@@ -1535,6 +2104,65 @@ public object NativeNice {
           ffi_created_at,
           ffi_svr_key,
           ffi_rng,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
+  public fun AuthenticatedChatConnection_set_one_time_ec_pre_keys(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    identityType: org.signal.libsignal.protocol.ServiceId.Kind,
+    preKeyIds: IntArray,
+    preKeyData: List<org.signal.libsignal.protocol.ecc.ECPublicKey>,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_identity_type = (org.signal.libsignal.protocol.ServiceId.Kind::ordinal)(identityType)
+    val ffi_pre_key_ids = identity(preKeyIds)
+    val ffi_pre_key_data =
+      mapBridgeVecArg<org.signal.libsignal.protocol.ecc.ECPublicKey, org.signal.libsignal.protocol.ecc.ECPublicKey>({
+        identity(it)
+      })(preKeyData)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_set_one_time_ec_pre_keys(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_identity_type,
+          ffi_pre_key_ids,
+          ffi_pre_key_data,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
+  public fun AuthenticatedChatConnection_set_one_time_kem_pre_keys(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    identityType: org.signal.libsignal.protocol.ServiceId.Kind,
+    preKeyIds: IntArray,
+    preKeyData: List<org.signal.libsignal.protocol.kem.KEMPublicKey>,
+    preKeySignatures: List<ByteArray>,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_identity_type = (org.signal.libsignal.protocol.ServiceId.Kind::ordinal)(identityType)
+    val ffi_pre_key_ids = identity(preKeyIds)
+    val ffi_pre_key_data =
+      mapBridgeVecArg<org.signal.libsignal.protocol.kem.KEMPublicKey, org.signal.libsignal.protocol.kem.KEMPublicKey>({
+        identity(it)
+      })(preKeyData)
+    val ffi_pre_key_signatures = mapBridgeVecArg<ByteArray, ByteArray>({ identity(it) })(preKeySignatures)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_set_one_time_kem_pre_keys(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_identity_type,
+          ffi_pre_key_ids,
+          ffi_pre_key_data,
+          ffi_pre_key_signatures,
         )
       }
     return ffiOut
@@ -1598,6 +2226,34 @@ public object NativeNice {
       .makeCancelable(asyncCtx)
   }
 
+  public fun AuthenticatedChatConnection_set_signed_ec_pre_key(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+    identityType: org.signal.libsignal.protocol.ServiceId.Kind,
+    id: Int,
+    key: org.signal.libsignal.protocol.ecc.ECPublicKey,
+    signature: ByteArray,
+  ): CompletableFuture<Void?> {
+    val ffi_chat = identity(chat)
+    val ffi_identity_type = (org.signal.libsignal.protocol.ServiceId.Kind::ordinal)(identityType)
+    val ffi_id = identity(id)
+    val ffi_key = identity(key)
+    val ffi_signature = identity(signature)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_set_signed_ec_pre_key(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_identity_type,
+          ffi_id,
+          ffi_key,
+          ffi_signature,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+  }
+
   public fun AuthenticatedChatConnection_set_username_link(
     asyncCtx: TokioAsyncContext,
     chat: org.signal.libsignal.net.AuthenticatedChatConnection,
@@ -1618,6 +2274,40 @@ public object NativeNice {
       }
     return ffiOut
       .makeCancelable(asyncCtx)
+  }
+
+  public fun AuthenticatedChatConnection_start_mfa_verification(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+  ): CompletableFuture<org.signal.libsignal.net.StartMfaVerificationResponse> {
+    val ffi_chat = identity(chat)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_start_mfa_verification(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply { downcastFromObject<org.signal.libsignal.net.StartMfaVerificationResponse>(it) }
+  }
+
+  public fun AuthenticatedChatConnection_start_web_authn_registration(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.AuthenticatedChatConnection,
+  ): CompletableFuture<org.signal.libsignal.internal.BridgeWebAuthnCreateParameters> {
+    val ffi_chat = identity(chat)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.AuthenticatedChatConnection_start_web_authn_registration(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply { downcastFromObject<org.signal.libsignal.internal.BridgeWebAuthnCreateParameters>(it) }
   }
 
   public fun CopyBackupMediaStream_next(
@@ -2093,6 +2783,7 @@ public object NativeNice {
     receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
     serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
     purchaseTime: java.time.Instant,
+    expectedLevel: org.signal.libsignal.net.LoginReceiptLevel,
   ): CompletableFuture<org.signal.libsignal.zkgroup.receipts.ReceiptCredential> {
     val ffi_chat = identity(chat)
     val ffi_payment_processor = (org.signal.libsignal.net.PaymentProvider::toFfiArgTypeObject)(paymentProcessor)
@@ -2103,6 +2794,7 @@ public object NativeNice {
       )
     val ffi_server_params = identity(serverParams)
     val ffi_purchase_time = (java.time.Instant::toEpochMilli)(purchaseTime)
+    val ffi_expected_level = (org.signal.libsignal.net.LoginReceiptLevel::toFfiArgTypeObject)(expectedLevel)
     val ffiOut =
       NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
         Native.UnauthenticatedChatConnection_create_login_receipt_credential(
@@ -2113,6 +2805,70 @@ public object NativeNice {
           ffi_receipt_credential_request_context,
           ffi_server_params,
           ffi_purchase_time,
+          ffi_expected_level,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredential(x)
+          }
+        )(it)
+      }
+  }
+
+  public fun UnauthenticatedChatConnection_get_profile_key_credential(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.UnauthenticatedChatConnection,
+    profileKeyRequestContext: org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext,
+    serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
+  ): CompletableFuture<org.signal.libsignal.zkgroup.profiles.ExpiringProfileKeyCredential> {
+    val ffi_chat = identity(chat)
+    val ffi_profile_key_request_context =
+      (org.signal.libsignal.zkgroup.internal.ByteArray::getInternalContentsForJNI)(profileKeyRequestContext)
+    val ffi_server_params = identity(serverParams)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.UnauthenticatedChatConnection_get_profile_key_credential(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_profile_key_request_context,
+          ffi_server_params,
+        )
+      }
+    return ffiOut
+      .makeCancelable(asyncCtx)
+      .thenApply {
+        org.signal.libsignal.zkgroup.profiles
+          .ExpiringProfileKeyCredential(it)
+      }
+  }
+
+  public fun UnauthenticatedChatConnection_get_subscription_receipt_credential(
+    asyncCtx: TokioAsyncContext,
+    chat: org.signal.libsignal.net.UnauthenticatedChatConnection,
+    subscriberId: ByteArray,
+    receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
+    serverParams: org.signal.libsignal.zkgroup.ServerPublicParams,
+  ): CompletableFuture<org.signal.libsignal.zkgroup.receipts.ReceiptCredential> {
+    val ffi_chat = identity(chat)
+    val ffi_subscriber_id = identity(subscriberId)
+    val ffi_receipt_credential_request_context =
+      (org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext::getInternalContentsForJNI)(
+        receiptCredentialRequestContext,
+      )
+    val ffi_server_params = identity(serverParams)
+    val ffiOut =
+      NativeHandleGuard(asyncCtx).use { asyncCtxHandle ->
+        Native.UnauthenticatedChatConnection_get_subscription_receipt_credential(
+          asyncCtxHandle.nativeHandle(),
+          ffi_chat,
+          ffi_subscriber_id,
+          ffi_receipt_credential_request_context,
+          ffi_server_params,
         )
       }
     return ffiOut

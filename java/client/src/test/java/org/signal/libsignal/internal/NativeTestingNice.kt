@@ -17,12 +17,15 @@
 
 package org.signal.libsignal.internal
 
+import org.signal.libsignal.internal.NativeNiceHelpers.argPairConverter
 import org.signal.libsignal.internal.NativeNiceHelpers.convertToObject
 import org.signal.libsignal.internal.NativeNiceHelpers.downcastFromObject
 import org.signal.libsignal.internal.NativeNiceHelpers.identity
 import org.signal.libsignal.internal.NativeNiceHelpers.mapBridgeVecArg
 import org.signal.libsignal.internal.NativeNiceHelpers.mapBridgeVecReturn
 import org.signal.libsignal.internal.NativeNiceHelpers.mapPair
+import org.signal.libsignal.internal.NativeNiceHelpers.stringMapArgConverter
+import org.signal.libsignal.internal.NativeNiceHelpers.stringMapReturnConverter
 
 public data class CheckSvrCredentialsArgs(
   public val number: String,
@@ -73,12 +76,28 @@ public sealed class CopyBackupMediaOut {
   public data object CredentialRejectedWithoutAppropriateServerInfo : CopyBackupMediaOut()
 }
 
+public data class CreateDonationPermitsArgs(
+  public val requestContext: org.signal.libsignal.zkgroup.donation.DonationPermitRequestContext,
+  public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
+)
+
+public sealed class CreateDonationPermitsOut {
+  public data class Success(
+    public val _0: List<org.signal.libsignal.zkgroup.donation.DonationPermit>,
+  ) : CreateDonationPermitsOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : CreateDonationPermitsOut()
+}
+
 public data class CreateLoginReceiptCredentialArgs(
   public val paymentProcessor: org.signal.libsignal.net.PaymentProvider,
   public val purchaseIdentifier: String,
   public val receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
   public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
   public val purchaseTime: java.time.Instant,
+  public val expectedLevel: org.signal.libsignal.net.LoginReceiptLevel,
 )
 
 public sealed class CreateLoginReceiptCredentialOut {
@@ -107,6 +126,30 @@ public sealed class DeleteBackupMediaOut {
   public data object CredentialRejectedWithoutAppropriateServerInfo : DeleteBackupMediaOut()
 }
 
+public sealed class FinishMfaVerificationOut {
+  public data object Success : FinishMfaVerificationOut()
+
+  public data object FailedToVerify : FinishMfaVerificationOut()
+}
+
+public data class FinishWebAuthnRegistrationArgs(
+  public val attestationObject: ByteArray,
+  public val collectedClientDataJson: String,
+  public val name: String,
+  public val createdAt: java.time.Instant,
+  public val svrKey: ByteArray,
+)
+
+public sealed class FinishWebAuthnRegistrationOut {
+  public data class Success(
+    public val _0: Int,
+  ) : FinishWebAuthnRegistrationOut()
+
+  public data object WebAuthnRegistrationUnsuccessful : FinishWebAuthnRegistrationOut()
+
+  public data object TooManyMfaKeys : FinishWebAuthnRegistrationOut()
+}
+
 public sealed class GenerateTotpKeyOut {
   public data class Success(
     public val _0: org.signal.libsignal.internal.BridgePendingTotpKey,
@@ -115,6 +158,14 @@ public sealed class GenerateTotpKeyOut {
   public data object TooManyTotpKeys : GenerateTotpKeyOut()
 
   public data object TooManyMfaKeys : GenerateTotpKeyOut()
+}
+
+public sealed class GetCapabilitiesOut {
+  public data class Success(
+    public val _0: List<org.signal.libsignal.internal.DeviceCapabilityInternal>,
+  ) : GetCapabilitiesOut()
+
+  public data object Malformed : GetCapabilitiesOut()
 }
 
 public sealed class GetCdnCredentialsOut {
@@ -130,6 +181,14 @@ public sealed class GetCdnCredentialsOut {
 public data class GetDevicesOut(
   public val devices: List<org.signal.libsignal.net.LinkedDevice>,
 )
+
+public sealed class GetEntitlementsOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.net.AccountEntitlements,
+  ) : GetEntitlementsOut()
+
+  public data object Malformed : GetEntitlementsOut()
+}
 
 public sealed class GetMediaBackupInfoOut {
   public data class Success(
@@ -151,12 +210,51 @@ public sealed class GetMessageBackupInfoOut {
   public data object MissingResponse : GetMessageBackupInfoOut()
 }
 
+public data class GetProfileKeyCredentialArgs(
+  public val profileKeyRequestContext: org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext,
+  public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
+)
+
+public sealed class GetProfileKeyCredentialOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.zkgroup.profiles.ExpiringProfileKeyCredential,
+  ) : GetProfileKeyCredentialOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : GetProfileKeyCredentialOut()
+
+  public data class ExplicitError(
+    public val _0: org.signal.libsignal.internal.ProfileKeyCredentialRequestError,
+  ) : GetProfileKeyCredentialOut()
+}
+
 public sealed class GetStickerUploadFormsOut {
   public data class Success(
     public val _0: org.signal.libsignal.net.GetStickerUploadFormsResponse,
   ) : GetStickerUploadFormsOut()
 
   public data object Invalid : GetStickerUploadFormsOut()
+}
+
+public data class GetSubscriptionReceiptCredentialArgs(
+  public val subscriberId: ByteArray,
+  public val receiptCredentialRequestContext: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialRequestContext,
+  public val serverParams: org.signal.libsignal.internal.ServerPublicParamsSerialized,
+)
+
+public sealed class GetSubscriptionReceiptCredentialOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.zkgroup.receipts.ReceiptCredential,
+  ) : GetSubscriptionReceiptCredentialOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : GetSubscriptionReceiptCredentialOut()
+
+  public data class ExplicitError(
+    public val _0: org.signal.libsignal.internal.ReceiptCredentialError,
+  ) : GetSubscriptionReceiptCredentialOut()
 }
 
 public sealed class GetSvrBCredentialsOut {
@@ -288,6 +386,12 @@ public data class MyTestStruct(
   public val myStringField: String,
 )
 
+public sealed class ProfileKeyCredentialRequestError {
+  public data object AuthFailed : ProfileKeyCredentialRequestError()
+
+  public data object ProfileNotFound : ProfileKeyCredentialRequestError()
+}
+
 public sealed class ReceiptCredentialError {
   public data object PaymentStillProcessing : ReceiptCredentialError()
 
@@ -310,6 +414,23 @@ public sealed class RedeemBackupReceiptOut {
   public data object MissingResponse : RedeemBackupReceiptOut()
 }
 
+public data class RedeemDonationReceiptArgs(
+  public val presentation: org.signal.libsignal.zkgroup.receipts.ReceiptCredentialPresentation,
+  public val visibility: org.signal.libsignal.net.BadgeVisibility,
+)
+
+public sealed class RedeemDonationReceiptOut {
+  public data object Success : RedeemDonationReceiptOut()
+
+  public data object InvalidReceipt : RedeemDonationReceiptOut()
+
+  public data object AlreadyRedeemed : RedeemDonationReceiptOut()
+
+  public data class UnexpectedError(
+    public val contains: String,
+  ) : RedeemDonationReceiptOut()
+}
+
 public data class RemoveDeviceArgs(
   public val id: Int,
 )
@@ -325,6 +446,12 @@ public data class RemoveMfaKeyArgs(
 public sealed class RemoveMfaKeyOut {
   public data object Success : RemoveMfaKeyOut()
 }
+
+public data class ReportMessageArgs(
+  public val source: org.signal.libsignal.protocol.ServiceId.Aci,
+  public val messageGuid: java.util.UUID,
+  public val reportSpamToken: ByteArray,
+)
 
 public data class ReserveUsernameHashArgs(
   public val usernames: List<ByteArray>,
@@ -357,6 +484,11 @@ public sealed class SetDeviceNameOut {
   public data object DeviceNotFound : SetDeviceNameOut()
 }
 
+public data class SetLastResortKemPreKeyArgs(
+  public val identity: Int,
+  public val preKey: org.signal.libsignal.internal.TestingAnySignedPreKey,
+)
+
 public data class SetMfaKeyMetadataArgs(
   public val keyId: Int,
   public val name: String,
@@ -369,6 +501,21 @@ public sealed class SetMfaKeyMetadataOut {
 
   public data object KeyNotFound : SetMfaKeyMetadataOut()
 }
+
+public data class SetOneTimeEcPreKeysArgs(
+  public val identity: Int,
+  public val preKeys: List<Pair<Int, ByteArray>>,
+)
+
+public data class SetOneTimeKemPreKeysArgs(
+  public val identity: Int,
+  public val preKeys: List<org.signal.libsignal.internal.TestingAnySignedPreKey>,
+)
+
+public data class SetSignedEcPreKeyArgs(
+  public val identity: Int,
+  public val preKey: org.signal.libsignal.internal.TestingAnySignedPreKey,
+)
 
 public data class SetUsernameLinkArgs(
   public val usernameCiphertext: ByteArray,
@@ -391,10 +538,53 @@ public sealed class SimpleBackupTestOut {
   public data object MissingResponse : SimpleBackupTestOut()
 }
 
+public sealed class StartMfaVerificationOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.net.StartMfaVerificationResponse,
+  ) : StartMfaVerificationOut()
+
+  public data object Malformed : StartMfaVerificationOut()
+}
+
+public sealed class StartWebAuthnRegistrationOut {
+  public data class Success(
+    public val _0: org.signal.libsignal.internal.BridgeWebAuthnCreateParameters,
+  ) : StartWebAuthnRegistrationOut()
+
+  public data object TooManyMfaKeys : StartWebAuthnRegistrationOut()
+}
+
 public data class TestStreamChunk(
   public val chunk: List<String>,
   public val termination: Any?,
 )
+
+public data class TestingAnySignedPreKey(
+  public val id: Int,
+  public val key: ByteArray,
+  public val sig: ByteArray,
+)
+
+public object BadgeVisibility_DoNotSet_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.BadgeVisibility.DoNotSet
+}
+
+public object BadgeVisibility_SetVisible_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.BadgeVisibility.SetVisible
+}
+
+public object BadgeVisibility_SetPrimary_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.BadgeVisibility.SetPrimary
+}
 
 public object BridgeCopyBackupMediaItem_ReturnConverter {
   @CalledFromNative
@@ -418,6 +608,28 @@ public object BridgeCopyBackupMediaItem_ReturnConverter {
         identity(media_id as ByteArray),
       encryptionKey =
         identity(encryption_key as ByteArray),
+    )
+}
+
+public object BridgeMfaVerificationCredential_Totp_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(password: Any?): Any? =
+    org.signal.libsignal.net.MfaVerificationCredential.Totp(
+      password =
+        identity(password as Int),
+    )
+}
+
+public object BridgeMfaVerificationCredential_WebAuthn_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(json: Any?): Any? =
+    org.signal.libsignal.net.MfaVerificationCredential.WebAuthn(
+      json =
+        identity(json as String),
     )
 }
 
@@ -455,9 +667,9 @@ public object CallQualitySurveyInternal_ReturnConverter {
       callQualityIssues =
         mapBridgeVecReturn<String, String>({ identity(it) })(call_quality_issues as Array<*>),
       additionalIssuesDescription =
-        identity(additional_issues_description as String?),
+        ({ x: String? -> x?.let { identity(it) } })(additional_issues_description as String?),
       debugLogUrl =
-        identity(debug_log_url as String?),
+        ({ x: String? -> x?.let { identity(it) } })(debug_log_url as String?),
       startTimestamp =
         (java.time.Instant::ofEpochMilli)(start_timestamp as Long),
       endTimestamp =
@@ -491,9 +703,9 @@ public object CallQualitySurveyInternal_ReturnConverter {
       videoSendPacketLossFraction =
         identity(video_send_packet_loss_fraction as Float?),
       callTelemetry =
-        identity(call_telemetry as ByteArray?),
+        ({ x: ByteArray? -> x?.let { identity(it) } })(call_telemetry as ByteArray?),
       callIdHash =
-        identity(call_id_hash as ByteArray?),
+        ({ x: ByteArray? -> x?.let { identity(it) } })(call_id_hash as ByteArray?),
     )
 }
 
@@ -633,6 +845,58 @@ public object CopyBackupMediaOut_CredentialRejectedWithoutAppropriateServerInfo_
   internal fun fromNative(): Any? = CopyBackupMediaOut.CredentialRejectedWithoutAppropriateServerInfo
 }
 
+public object CreateDonationPermitsArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    request_context: Any?,
+    server_params: Any?,
+  ): Any? =
+    CreateDonationPermitsArgs(
+      requestContext =
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.donation
+              .DonationPermitRequestContext(x)
+          }
+        )(request_context as ByteArray),
+      serverParams =
+        downcastFromObject<org.signal.libsignal.internal.ServerPublicParamsSerialized>(
+          server_params as Object,
+        ),
+    )
+}
+
+public object CreateDonationPermitsOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    CreateDonationPermitsOut.Success(
+      _0 =
+        mapBridgeVecReturn<ByteArray, org.signal.libsignal.zkgroup.donation.DonationPermit>({
+          (
+            { x: ByteArray ->
+              org.signal.libsignal.zkgroup.donation
+                .DonationPermit(x)
+            }
+          )(it)
+        })(_0 as Array<*>),
+    )
+}
+
+public object CreateDonationPermitsOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    CreateDonationPermitsOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
 public object CreateLoginReceiptCredentialArgs_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -643,6 +907,7 @@ public object CreateLoginReceiptCredentialArgs_ReturnConverter {
     receipt_credential_request_context: Any?,
     server_params: Any?,
     purchase_time: Any?,
+    expected_level: Any?,
   ): Any? =
     CreateLoginReceiptCredentialArgs(
       paymentProcessor =
@@ -662,6 +927,8 @@ public object CreateLoginReceiptCredentialArgs_ReturnConverter {
         ),
       purchaseTime =
         (java.time.Instant::ofEpochMilli)(purchase_time as Long),
+      expectedLevel =
+        downcastFromObject<org.signal.libsignal.net.LoginReceiptLevel>(expected_level as Object),
     )
 }
 
@@ -735,53 +1002,68 @@ public object DeleteBackupMediaOut_CredentialRejectedWithoutAppropriateServerInf
   internal fun fromNative(): Any? = DeleteBackupMediaOut.CredentialRejectedWithoutAppropriateServerInfo
 }
 
-public object DeviceCapabilityInternal_Storage_ReturnConverter {
+public object FinishMfaVerificationOut_Success_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.Storage
+  internal fun fromNative(): Any? = FinishMfaVerificationOut.Success
 }
 
-public object DeviceCapabilityInternal_Transfer_ReturnConverter {
+public object FinishMfaVerificationOut_FailedToVerify_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.Transfer
+  internal fun fromNative(): Any? = FinishMfaVerificationOut.FailedToVerify
 }
 
-public object DeviceCapabilityInternal_AttachmentBackfill_ReturnConverter {
+public object FinishWebAuthnRegistrationArgs_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.AttachmentBackfill
+  internal fun fromNative(
+    attestation_object: Any?,
+    collected_client_data_json: Any?,
+    name: Any?,
+    created_at: Any?,
+    svr_key: Any?,
+  ): Any? =
+    FinishWebAuthnRegistrationArgs(
+      attestationObject =
+        identity(attestation_object as ByteArray),
+      collectedClientDataJson =
+        identity(collected_client_data_json as String),
+      name =
+        identity(name as String),
+      createdAt =
+        (java.time.Instant::ofEpochMilli)(created_at as Long),
+      svrKey =
+        identity(svr_key as ByteArray),
+    )
 }
 
-public object DeviceCapabilityInternal_SparsePostQuantumRatchet_ReturnConverter {
+public object FinishWebAuthnRegistrationOut_Success_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.SparsePostQuantumRatchet
+  internal fun fromNative(_0: Any?): Any? =
+    FinishWebAuthnRegistrationOut.Success(
+      _0 =
+        identity(_0 as Int),
+    )
 }
 
-public object DeviceCapabilityInternal_ProfilesV2_ReturnConverter {
+public object FinishWebAuthnRegistrationOut_WebAuthnRegistrationUnsuccessful_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.ProfilesV2
+  internal fun fromNative(): Any? = FinishWebAuthnRegistrationOut.WebAuthnRegistrationUnsuccessful
 }
 
-public object DeviceCapabilityInternal_UsernameChangeSyncMessage_ReturnConverter {
+public object FinishWebAuthnRegistrationOut_TooManyMfaKeys_ReturnConverter {
   @CalledFromNative
   @JvmStatic
   @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.UsernameChangeSyncMessage
-}
-
-public object DeviceCapabilityInternal_OptionalPhoneNumber_ReturnConverter {
-  @CalledFromNative
-  @JvmStatic
-  @JvmName("fromNative")
-  internal fun fromNative(): Any? = DeviceCapabilityInternal.OptionalPhoneNumber
+  internal fun fromNative(): Any? = FinishWebAuthnRegistrationOut.TooManyMfaKeys
 }
 
 public object GenerateTotpKeyOut_Success_ReturnConverter {
@@ -807,6 +1089,26 @@ public object GenerateTotpKeyOut_TooManyMfaKeys_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = GenerateTotpKeyOut.TooManyMfaKeys
+}
+
+public object GetCapabilitiesOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetCapabilitiesOut.Success(
+      _0 =
+        mapBridgeVecReturn<Object, org.signal.libsignal.internal.DeviceCapabilityInternal>({
+          downcastFromObject<org.signal.libsignal.internal.DeviceCapabilityInternal>(it)
+        })(_0 as Array<*>),
+    )
+}
+
+public object GetCapabilitiesOut_Malformed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = GetCapabilitiesOut.Malformed
 }
 
 public object GetCdnCredentialsOut_Success_ReturnConverter {
@@ -846,6 +1148,24 @@ public object GetDevicesOut_ReturnConverter {
           downcastFromObject<org.signal.libsignal.net.LinkedDevice>(it)
         })(devices as Array<*>),
     )
+}
+
+public object GetEntitlementsOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetEntitlementsOut.Success(
+      _0 =
+        downcastFromObject<org.signal.libsignal.net.AccountEntitlements>(_0 as Object),
+    )
+}
+
+public object GetEntitlementsOut_Malformed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = GetEntitlementsOut.Malformed
 }
 
 public object GetMediaBackupInfoOut_Success_ReturnConverter {
@@ -898,6 +1218,60 @@ public object GetMessageBackupInfoOut_MissingResponse_ReturnConverter {
   internal fun fromNative(): Any? = GetMessageBackupInfoOut.MissingResponse
 }
 
+public object GetProfileKeyCredentialArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    profile_key_request_context: Any?,
+    server_params: Any?,
+  ): Any? =
+    GetProfileKeyCredentialArgs(
+      profileKeyRequestContext =
+        org.signal.libsignal.zkgroup.profiles.ProfileKeyCredentialRequestContext(
+          profile_key_request_context as ByteArray,
+        ),
+      serverParams =
+        downcastFromObject<org.signal.libsignal.internal.ServerPublicParamsSerialized>(
+          server_params as Object,
+        ),
+    )
+}
+
+public object GetProfileKeyCredentialOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetProfileKeyCredentialOut.Success(
+      _0 =
+        org.signal.libsignal.zkgroup.profiles
+          .ExpiringProfileKeyCredential(_0 as ByteArray),
+    )
+}
+
+public object GetProfileKeyCredentialOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    GetProfileKeyCredentialOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
+public object GetProfileKeyCredentialOut_ExplicitError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetProfileKeyCredentialOut.ExplicitError(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.ProfileKeyCredentialRequestError>(_0 as Object),
+    )
+}
+
 public object GetStickerUploadFormsOut_Success_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -914,6 +1288,70 @@ public object GetStickerUploadFormsOut_Invalid_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = GetStickerUploadFormsOut.Invalid
+}
+
+public object GetSubscriptionReceiptCredentialArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    subscriber_id: Any?,
+    receipt_credential_request_context: Any?,
+    server_params: Any?,
+  ): Any? =
+    GetSubscriptionReceiptCredentialArgs(
+      subscriberId =
+        identity(subscriber_id as ByteArray),
+      receiptCredentialRequestContext =
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredentialRequestContext(x)
+          }
+        )(receipt_credential_request_context as ByteArray),
+      serverParams =
+        downcastFromObject<org.signal.libsignal.internal.ServerPublicParamsSerialized>(
+          server_params as Object,
+        ),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.Success(
+      _0 =
+        (
+          { x: ByteArray ->
+            org.signal.libsignal.zkgroup.receipts
+              .ReceiptCredential(x)
+          }
+        )(_0 as ByteArray),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
+public object GetSubscriptionReceiptCredentialOut_ExplicitError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    GetSubscriptionReceiptCredentialOut.ExplicitError(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.ReceiptCredentialError>(_0 as Object),
+    )
 }
 
 public object GetSvrBCredentialsOut_Success_ReturnConverter {
@@ -956,7 +1394,7 @@ public object ListMediaArgs_ReturnConverter {
   ): Any? =
     ListMediaArgs(
       cursor =
-        identity(cursor as String?),
+        ({ x: String? -> x?.let { identity(it) } })(cursor as String?),
       limit =
         identity(limit as Int),
     )
@@ -1016,6 +1454,20 @@ public object ListMfaKeysOut_Success_ReturnConverter {
           downcastFromObject<org.signal.libsignal.internal.BridgeConfirmedMfaKey>(it)
         })(_0 as Array<*>),
     )
+}
+
+public object LoginReceiptLevel_Normal_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.LoginReceiptLevel.Normal
+}
+
+public object LoginReceiptLevel_Sandbox_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = org.signal.libsignal.net.LoginReceiptLevel.Sandbox
 }
 
 public object LookUpUsernameLinkArgs_ReturnConverter {
@@ -1227,6 +1679,20 @@ public object MyTestStruct_ReturnConverter {
     )
 }
 
+public object ProfileKeyCredentialRequestError_AuthFailed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = ProfileKeyCredentialRequestError.AuthFailed
+}
+
+public object ProfileKeyCredentialRequestError_ProfileNotFound_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = ProfileKeyCredentialRequestError.ProfileNotFound
+}
+
 public object ReceiptCredentialError_PaymentStillProcessing_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -1289,6 +1755,55 @@ public object RedeemBackupReceiptOut_MissingResponse_ReturnConverter {
   internal fun fromNative(): Any? = RedeemBackupReceiptOut.MissingResponse
 }
 
+public object RedeemDonationReceiptArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    presentation: Any?,
+    visibility: Any?,
+  ): Any? =
+    RedeemDonationReceiptArgs(
+      presentation =
+        org.signal.libsignal.zkgroup.receipts
+          .ReceiptCredentialPresentation(presentation as ByteArray),
+      visibility =
+        downcastFromObject<org.signal.libsignal.net.BadgeVisibility>(visibility as Object),
+    )
+}
+
+public object RedeemDonationReceiptOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = RedeemDonationReceiptOut.Success
+}
+
+public object RedeemDonationReceiptOut_InvalidReceipt_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = RedeemDonationReceiptOut.InvalidReceipt
+}
+
+public object RedeemDonationReceiptOut_AlreadyRedeemed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = RedeemDonationReceiptOut.AlreadyRedeemed
+}
+
+public object RedeemDonationReceiptOut_UnexpectedError_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(contains: Any?): Any? =
+    RedeemDonationReceiptOut.UnexpectedError(
+      contains =
+        identity(contains as String),
+    )
+}
+
 public object RemoveDeviceArgs_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -1323,6 +1838,26 @@ public object RemoveMfaKeyOut_Success_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = RemoveMfaKeyOut.Success
+}
+
+public object ReportMessageArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    source: Any?,
+    message_guid: Any?,
+    report_spam_token: Any?,
+  ): Any? =
+    ReportMessageArgs(
+      source =
+        org.signal.libsignal.protocol.ServiceId.Aci
+          .parseFromFixedWidthBinary(source as ByteArray),
+      messageGuid =
+        identity(message_guid as java.util.UUID),
+      reportSpamToken =
+        identity(report_spam_token as ByteArray),
+    )
 }
 
 public object ReserveUsernameHashArgs_ReturnConverter {
@@ -1408,6 +1943,22 @@ public object SetDeviceNameOut_DeviceNotFound_ReturnConverter {
   internal fun fromNative(): Any? = SetDeviceNameOut.DeviceNotFound
 }
 
+public object SetLastResortKemPreKeyArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    identity: Any?,
+    pre_key: Any?,
+  ): Any? =
+    SetLastResortKemPreKeyArgs(
+      identity =
+        identity(identity as Int),
+      preKey =
+        downcastFromObject<org.signal.libsignal.internal.TestingAnySignedPreKey>(pre_key as Object),
+    )
+}
+
 public object SetMfaKeyMetadataArgs_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -1442,6 +1993,58 @@ public object SetMfaKeyMetadataOut_KeyNotFound_ReturnConverter {
   @JvmStatic
   @JvmName("fromNative")
   internal fun fromNative(): Any? = SetMfaKeyMetadataOut.KeyNotFound
+}
+
+public object SetOneTimeEcPreKeysArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    identity: Any?,
+    pre_keys: Any?,
+  ): Any? =
+    SetOneTimeEcPreKeysArgs(
+      identity =
+        identity(identity as Int),
+      preKeys =
+        mapBridgeVecReturn<Pair<Int, ByteArray>, Pair<Int, ByteArray>>({
+          mapPair<Int, ByteArray, Int, ByteArray>({ identity(it) }, { identity(it) })(it)
+        })(pre_keys as Array<*>),
+    )
+}
+
+public object SetOneTimeKemPreKeysArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    identity: Any?,
+    pre_keys: Any?,
+  ): Any? =
+    SetOneTimeKemPreKeysArgs(
+      identity =
+        identity(identity as Int),
+      preKeys =
+        mapBridgeVecReturn<Object, org.signal.libsignal.internal.TestingAnySignedPreKey>({
+          downcastFromObject<org.signal.libsignal.internal.TestingAnySignedPreKey>(it)
+        })(pre_keys as Array<*>),
+    )
+}
+
+public object SetSignedEcPreKeyArgs_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    identity: Any?,
+    pre_key: Any?,
+  ): Any? =
+    SetSignedEcPreKeyArgs(
+      identity =
+        identity(identity as Int),
+      preKey =
+        downcastFromObject<org.signal.libsignal.internal.TestingAnySignedPreKey>(pre_key as Object),
+    )
 }
 
 public object SetUsernameLinkArgs_ReturnConverter {
@@ -1499,6 +2102,42 @@ public object SimpleBackupTestOut_MissingResponse_ReturnConverter {
   internal fun fromNative(): Any? = SimpleBackupTestOut.MissingResponse
 }
 
+public object StartMfaVerificationOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    StartMfaVerificationOut.Success(
+      _0 =
+        downcastFromObject<org.signal.libsignal.net.StartMfaVerificationResponse>(_0 as Object),
+    )
+}
+
+public object StartMfaVerificationOut_Malformed_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = StartMfaVerificationOut.Malformed
+}
+
+public object StartWebAuthnRegistrationOut_Success_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(_0: Any?): Any? =
+    StartWebAuthnRegistrationOut.Success(
+      _0 =
+        downcastFromObject<org.signal.libsignal.internal.BridgeWebAuthnCreateParameters>(_0 as Object),
+    )
+}
+
+public object StartWebAuthnRegistrationOut_TooManyMfaKeys_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(): Any? = StartWebAuthnRegistrationOut.TooManyMfaKeys
+}
+
 public object TestStreamChunk_ReturnConverter {
   @CalledFromNative
   @JvmStatic
@@ -1512,6 +2151,25 @@ public object TestStreamChunk_ReturnConverter {
         mapBridgeVecReturn<String, String>({ identity(it) })(chunk as Array<*>),
       termination =
         identity(termination as Object?),
+    )
+}
+
+public object TestingAnySignedPreKey_ReturnConverter {
+  @CalledFromNative
+  @JvmStatic
+  @JvmName("fromNative")
+  internal fun fromNative(
+    id: Any?,
+    key: Any?,
+    sig: Any?,
+  ): Any? =
+    TestingAnySignedPreKey(
+      id =
+        identity(id as Int),
+      key =
+        identity(key as ByteArray),
+      sig =
+        identity(sig as ByteArray),
     )
 }
 
@@ -1887,6 +2545,16 @@ public object NativeTestingNice {
       })(ffiOut)
   }
 
+  public fun TESTING_CreateDonationPermitsTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.CreateDonationPermitsArgs, org.signal.libsignal.internal.CreateDonationPermitsOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_CreateDonationPermitsTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.CreateDonationPermitsArgs, org.signal.libsignal.internal.CreateDonationPermitsOut>({
+        downcastFromObject<org.signal.libsignal.internal.CreateDonationPermitsArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.CreateDonationPermitsOut>(it) })(ffiOut)
+  }
+
   public fun TESTING_CreateLoginReceiptCredentialTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.CreateLoginReceiptCredentialArgs, org.signal.libsignal.internal.CreateLoginReceiptCredentialOut>> {
     val ffiOut =
       NativeTesting.TESTING_CreateLoginReceiptCredentialTests()
@@ -1940,6 +2608,26 @@ public object NativeTestingNice {
     }, { identity(it) })(ffiOut)
   }
 
+  public fun TESTING_FinishMfaVerificationTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.net.MfaVerificationCredential, org.signal.libsignal.internal.FinishMfaVerificationOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_FinishMfaVerificationTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.net.MfaVerificationCredential, org.signal.libsignal.internal.FinishMfaVerificationOut>({
+        downcastFromObject<org.signal.libsignal.net.MfaVerificationCredential>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.FinishMfaVerificationOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_FinishWebAuthnRegistrationTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.FinishWebAuthnRegistrationArgs, org.signal.libsignal.internal.FinishWebAuthnRegistrationOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_FinishWebAuthnRegistrationTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.FinishWebAuthnRegistrationArgs, org.signal.libsignal.internal.FinishWebAuthnRegistrationOut>({
+        downcastFromObject<org.signal.libsignal.internal.FinishWebAuthnRegistrationArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.FinishWebAuthnRegistrationOut>(it) })(ffiOut)
+  }
+
   public fun TESTING_GenerateTotpKeyTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.GenerateTotpKeyOut>> {
     val ffiOut =
       NativeTesting.TESTING_GenerateTotpKeyTests()
@@ -1970,6 +2658,16 @@ public object NativeTestingNice {
       }, { downcastFromObject<org.signal.libsignal.internal.GetSvrBCredentialsOut>(it) })(ffiOut)
   }
 
+  public fun TESTING_GetCapabilitiesTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.GetCapabilitiesOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetCapabilitiesTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.GetCapabilitiesOut>({
+        identity(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetCapabilitiesOut>(it) })(ffiOut)
+  }
+
   public fun TESTING_GetCurrencyConversionsTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.CurrencyConversionsInternal>> {
     val ffiOut =
       NativeTesting.TESTING_GetCurrencyConversionsTests()
@@ -1988,6 +2686,16 @@ public object NativeTestingNice {
       .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.GetDevicesOut>({
         identity(it)
       }, { downcastFromObject<org.signal.libsignal.internal.GetDevicesOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_GetEntitlementsTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.GetEntitlementsOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetEntitlementsTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.GetEntitlementsOut>({
+        identity(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetEntitlementsOut>(it) })(ffiOut)
   }
 
   public fun TESTING_GetMediaBackupInfoTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.GetMediaBackupInfoOut>> {
@@ -2020,6 +2728,16 @@ public object NativeTestingNice {
       }, { downcastFromObject<org.signal.libsignal.net.PreKeyCounts>(it) })(ffiOut)
   }
 
+  public fun TESTING_GetProfileKeyCredentialTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.GetProfileKeyCredentialArgs, org.signal.libsignal.internal.GetProfileKeyCredentialOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetProfileKeyCredentialTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.GetProfileKeyCredentialArgs, org.signal.libsignal.internal.GetProfileKeyCredentialOut>({
+        downcastFromObject<org.signal.libsignal.internal.GetProfileKeyCredentialArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetProfileKeyCredentialOut>(it) })(ffiOut)
+  }
+
   public fun TESTING_GetStickerUploadFormTests(): List<org.signal.libsignal.net.GrpcTestCase<Int, org.signal.libsignal.internal.GetStickerUploadFormsOut>> {
     val ffiOut =
       NativeTesting.TESTING_GetStickerUploadFormTests()
@@ -2028,6 +2746,16 @@ public object NativeTestingNice {
       .resultConverter<Int, Object, Int, org.signal.libsignal.internal.GetStickerUploadFormsOut>({
         identity(it)
       }, { downcastFromObject<org.signal.libsignal.internal.GetStickerUploadFormsOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_GetSubscriptionReceiptCredentialTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_GetSubscriptionReceiptCredentialTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs, org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>({
+        downcastFromObject<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.GetSubscriptionReceiptCredentialOut>(it) })(ffiOut)
   }
 
   public fun TESTING_ListMfaKeysTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ListMfaKeysArgs, org.signal.libsignal.internal.ListMfaKeysOut>> {
@@ -2246,6 +2974,16 @@ public object NativeTestingNice {
       }, { downcastFromObject<org.signal.libsignal.internal.RedeemBackupReceiptOut>(it) })(ffiOut)
   }
 
+  public fun TESTING_RedeemDonationReceiptTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.RedeemDonationReceiptArgs, org.signal.libsignal.internal.RedeemDonationReceiptOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_RedeemDonationReceiptTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Object, org.signal.libsignal.internal.RedeemDonationReceiptArgs, org.signal.libsignal.internal.RedeemDonationReceiptOut>({
+        downcastFromObject<org.signal.libsignal.internal.RedeemDonationReceiptArgs>(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.RedeemDonationReceiptOut>(it) })(ffiOut)
+  }
+
   public fun TESTING_RemoveDeviceTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.RemoveDeviceArgs, org.signal.libsignal.internal.RemoveDeviceOut>> {
     val ffiOut =
       NativeTesting.TESTING_RemoveDeviceTests()
@@ -2264,6 +3002,16 @@ public object NativeTestingNice {
       .resultConverter<Object, Object, org.signal.libsignal.internal.RemoveMfaKeyArgs, org.signal.libsignal.internal.RemoveMfaKeyOut>({
         downcastFromObject<org.signal.libsignal.internal.RemoveMfaKeyArgs>(it)
       }, { downcastFromObject<org.signal.libsignal.internal.RemoveMfaKeyOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_ReportMessageTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ReportMessageArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_ReportMessageTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.ReportMessageArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.ReportMessageArgs>(it)
+      }, { identity(it) })(ffiOut)
   }
 
   public fun TESTING_ReserveUsernameHashTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.ReserveUsernameHashArgs, org.signal.libsignal.internal.ReserveUsernameHashOut>> {
@@ -2290,7 +3038,7 @@ public object NativeTestingNice {
         ffi_present,
       )
 
-    return identity(ffiOut)
+    return ({ x: Throwable? -> x?.let { identity(it) } })(ffiOut)
   }
 
   public fun TESTING_SetCapabilitiesTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetCapabilitiesArgs, Void?>> {
@@ -2322,6 +3070,16 @@ public object NativeTestingNice {
     }, { identity(it) })(ffiOut)
   }
 
+  public fun TESTING_SetLastResortKemPreKeyTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetLastResortKemPreKeyArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_SetLastResortKemPreKeyTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.SetLastResortKemPreKeyArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.SetLastResortKemPreKeyArgs>(it)
+      }, { identity(it) })(ffiOut)
+  }
+
   public fun TESTING_SetMfaKeyMetadataTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetMfaKeyMetadataArgs, org.signal.libsignal.internal.SetMfaKeyMetadataOut>> {
     val ffiOut =
       NativeTesting.TESTING_SetMfaKeyMetadataTests()
@@ -2330,6 +3088,26 @@ public object NativeTestingNice {
       .resultConverter<Object, Object, org.signal.libsignal.internal.SetMfaKeyMetadataArgs, org.signal.libsignal.internal.SetMfaKeyMetadataOut>({
         downcastFromObject<org.signal.libsignal.internal.SetMfaKeyMetadataArgs>(it)
       }, { downcastFromObject<org.signal.libsignal.internal.SetMfaKeyMetadataOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_SetOneTimeEcPreKeysTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetOneTimeEcPreKeysArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_SetOneTimeEcPreKeysTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.SetOneTimeEcPreKeysArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.SetOneTimeEcPreKeysArgs>(it)
+      }, { identity(it) })(ffiOut)
+  }
+
+  public fun TESTING_SetOneTimeKemPreKeysTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetOneTimeKemPreKeysArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_SetOneTimeKemPreKeysTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.SetOneTimeKemPreKeysArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.SetOneTimeKemPreKeysArgs>(it)
+      }, { identity(it) })(ffiOut)
   }
 
   public fun TESTING_SetPushTokenFcmTests(): List<org.signal.libsignal.net.GrpcTestCase<String, Void?>> {
@@ -2359,6 +3137,16 @@ public object NativeTestingNice {
     }, { identity(it) })(ffiOut)
   }
 
+  public fun TESTING_SetSignedEcPreKeyTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetSignedEcPreKeyArgs, Void?>> {
+    val ffiOut =
+      NativeTesting.TESTING_SetSignedEcPreKeyTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Object, Void?, org.signal.libsignal.internal.SetSignedEcPreKeyArgs, Void?>({
+        downcastFromObject<org.signal.libsignal.internal.SetSignedEcPreKeyArgs>(it)
+      }, { identity(it) })(ffiOut)
+  }
+
   public fun TESTING_SetUsernameLinkTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.internal.SetUsernameLinkArgs, org.signal.libsignal.internal.SetUsernameLinkOut>> {
     val ffiOut =
       NativeTesting.TESTING_SetUsernameLinkTests()
@@ -2367,6 +3155,26 @@ public object NativeTestingNice {
       .resultConverter<Object, Object, org.signal.libsignal.internal.SetUsernameLinkArgs, org.signal.libsignal.internal.SetUsernameLinkOut>({
         downcastFromObject<org.signal.libsignal.internal.SetUsernameLinkArgs>(it)
       }, { downcastFromObject<org.signal.libsignal.internal.SetUsernameLinkOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_StartMfaVerificationTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.StartMfaVerificationOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_StartMfaVerificationTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.StartMfaVerificationOut>({
+        identity(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.StartMfaVerificationOut>(it) })(ffiOut)
+  }
+
+  public fun TESTING_StartWebAuthnRegistrationTests(): List<org.signal.libsignal.net.GrpcTestCase<Void?, org.signal.libsignal.internal.StartWebAuthnRegistrationOut>> {
+    val ffiOut =
+      NativeTesting.TESTING_StartWebAuthnRegistrationTests()
+
+    return org.signal.libsignal.net.GrpcTestCase
+      .resultConverter<Void?, Object, Void?, org.signal.libsignal.internal.StartWebAuthnRegistrationOut>({
+        identity(it)
+      }, { downcastFromObject<org.signal.libsignal.internal.StartWebAuthnRegistrationOut>(it) })(ffiOut)
   }
 
   public fun TESTING_SubmitCallQualitySurveyTests(): List<org.signal.libsignal.net.GrpcTestCase<org.signal.libsignal.net.CallQualitySurvey, Void?>> {
@@ -2554,6 +3362,58 @@ public object NativeTestingNice {
     return identity(ffiOut)
   }
 
+  public fun TESTING_conversion_MapStringMySimpleTestEnum_identity(
+    x: Map<String, org.signal.libsignal.internal.MySimpleTestEnum>,
+  ): Map<String, org.signal.libsignal.internal.MySimpleTestEnum> {
+    val ffi_x =
+      stringMapArgConverter<Object, org.signal.libsignal.internal.MySimpleTestEnum>({
+        (org.signal.libsignal.internal.MySimpleTestEnum::toFfiArgTypeObject)(it)
+      })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_MapStringMySimpleTestEnum_identity(
+        ffi_x,
+      )
+
+    return stringMapReturnConverter<Object, org.signal.libsignal.internal.MySimpleTestEnum>({
+      downcastFromObject<org.signal.libsignal.internal.MySimpleTestEnum>(it)
+    })(ffiOut)
+  }
+
+  public fun TESTING_conversion_MapStringMySimpleTestEnum_to_string(
+    x: Map<String, org.signal.libsignal.internal.MySimpleTestEnum>,
+  ): String {
+    val ffi_x =
+      stringMapArgConverter<Object, org.signal.libsignal.internal.MySimpleTestEnum>({
+        (org.signal.libsignal.internal.MySimpleTestEnum::toFfiArgTypeObject)(it)
+      })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_MapStringMySimpleTestEnum_to_string(
+        ffi_x,
+      )
+
+    return identity(ffiOut)
+  }
+
+  public fun TESTING_conversion_MapStringString_identity(x: Map<String, String>): Map<String, String> {
+    val ffi_x = stringMapArgConverter<String, String>({ identity(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_MapStringString_identity(
+        ffi_x,
+      )
+
+    return stringMapReturnConverter<String, String>({ identity(it) })(ffiOut)
+  }
+
+  public fun TESTING_conversion_MapStringString_to_string(x: Map<String, String>): String {
+    val ffi_x = stringMapArgConverter<String, String>({ identity(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_MapStringString_to_string(
+        ffi_x,
+      )
+
+    return identity(ffiOut)
+  }
+
   public fun TESTING_conversion_OptionalBytes_identity(x: ByteArray?): ByteArray? {
     val ffi_x = identity(x)
     val ffiOut =
@@ -2561,7 +3421,7 @@ public object NativeTestingNice {
         ffi_x,
       )
 
-    return identity(ffiOut)
+    return ({ x: ByteArray? -> x?.let { identity(it) } })(ffiOut)
   }
 
   public fun TESTING_conversion_OptionalBytes_to_string(x: ByteArray?): String {
@@ -2601,13 +3461,65 @@ public object NativeTestingNice {
         ffi_x,
       )
 
-    return identity(ffiOut)
+    return ({ x: String? -> x?.let { identity(it) } })(ffiOut)
   }
 
   public fun TESTING_conversion_OptionalString_to_string(x: String?): String {
     val ffi_x = identity(x)
     val ffiOut =
       NativeTesting.TESTING_conversion_OptionalString_to_string(
+        ffi_x,
+      )
+
+    return identity(ffiOut)
+  }
+
+  public fun TESTING_conversion_PairStringMySimpleTestEnum_identity(
+    x: Pair<String, org.signal.libsignal.internal.MySimpleTestEnum>,
+  ): Pair<String, org.signal.libsignal.internal.MySimpleTestEnum> {
+    val ffi_x =
+      argPairConverter<String, Object, String, org.signal.libsignal.internal.MySimpleTestEnum>({
+        identity(it)
+      }, { (org.signal.libsignal.internal.MySimpleTestEnum::toFfiArgTypeObject)(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_PairStringMySimpleTestEnum_identity(
+        ffi_x,
+      )
+
+    return mapPair<String, Object, String, org.signal.libsignal.internal.MySimpleTestEnum>({
+      identity(it)
+    }, { downcastFromObject<org.signal.libsignal.internal.MySimpleTestEnum>(it) })(ffiOut)
+  }
+
+  public fun TESTING_conversion_PairStringMySimpleTestEnum_to_string(
+    x: Pair<String, org.signal.libsignal.internal.MySimpleTestEnum>,
+  ): String {
+    val ffi_x =
+      argPairConverter<String, Object, String, org.signal.libsignal.internal.MySimpleTestEnum>({
+        identity(it)
+      }, { (org.signal.libsignal.internal.MySimpleTestEnum::toFfiArgTypeObject)(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_PairStringMySimpleTestEnum_to_string(
+        ffi_x,
+      )
+
+    return identity(ffiOut)
+  }
+
+  public fun TESTING_conversion_PairStringString_identity(x: Pair<String, String>): Pair<String, String> {
+    val ffi_x = argPairConverter<String, String, String, String>({ identity(it) }, { identity(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_PairStringString_identity(
+        ffi_x,
+      )
+
+    return mapPair<String, String, String, String>({ identity(it) }, { identity(it) })(ffiOut)
+  }
+
+  public fun TESTING_conversion_PairStringString_to_string(x: Pair<String, String>): String {
+    val ffi_x = argPairConverter<String, String, String, String>({ identity(it) }, { identity(it) })(x)
+    val ffiOut =
+      NativeTesting.TESTING_conversion_PairStringString_to_string(
         ffi_x,
       )
 

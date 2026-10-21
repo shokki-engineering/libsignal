@@ -86,16 +86,22 @@ public enum SignalError: Error {
     case usernameReservationNotFound(String)
     case invalidReceipt(String)
     case missingBackupId(String)
-    case ReceiptCredentialErrorPaymentStillProcessing(String)
-    case ReceiptCredentialErrorPaymentRequired(chargeFailure: ChargeFailure?, message: String)
-    case ReceiptCredentialErrorPaymentNotFound(String)
-    case ReceiptCredentialErrorReceiptAlreadyIssued(String)
+    case receiptCredentialErrorPaymentStillProcessing(String)
+    case receiptCredentialErrorPaymentRequired(chargeFailure: ChargeFailure?, message: String)
+    case receiptCredentialErrorPaymentNotFound(String)
+    case receiptCredentialErrorReceiptAlreadyIssued(String)
     case tooManyTotpKeys(String)
     case tooManyMfaKeys(String)
-    case oneTimePasswordNotVerified(String)
+    case mfaNotVerified(String)
     case mfaKeyNotFound(String)
+    case webAuthnRegistrationUnsuccessful(String)
+    case profileNotFound(String)
+    case receiptAlreadyRedeemed(String)
 
     case unknown(UInt32, String)
+
+    @available(*, unavailable, renamed: "mfaNotVerified(_:)")
+    public static func oneTimePasswordNotVerified() {}
 }
 
 internal typealias SignalFfiErrorRef = OpaquePointer
@@ -384,25 +390,31 @@ internal func checkError(_ error: SignalFfiErrorRef?) throws {
     case SignalErrorCodeMissingBackupId:
         throw SignalError.missingBackupId(errStr)
     case SignalErrorCodeReceiptCredentialErrorPaymentStillProcessing:
-        throw SignalError.ReceiptCredentialErrorPaymentStillProcessing(errStr)
+        throw SignalError.receiptCredentialErrorPaymentStillProcessing(errStr)
     case SignalErrorCodeReceiptCredentialErrorPaymentRequired:
         let chargeFailure = try NativeNice.Error_GetChargeFailure(err: error)
-        throw SignalError.ReceiptCredentialErrorPaymentRequired(
+        throw SignalError.receiptCredentialErrorPaymentRequired(
             chargeFailure: chargeFailure,
             message: errStr
         )
     case SignalErrorCodeReceiptCredentialErrorPaymentNotFound:
-        throw SignalError.ReceiptCredentialErrorPaymentNotFound(errStr)
+        throw SignalError.receiptCredentialErrorPaymentNotFound(errStr)
     case SignalErrorCodeReceiptCredentialErrorReceiptAlreadyIssued:
-        throw SignalError.ReceiptCredentialErrorReceiptAlreadyIssued(errStr)
+        throw SignalError.receiptCredentialErrorReceiptAlreadyIssued(errStr)
     case SignalErrorCodeTooManyTotpKeys:
         throw SignalError.tooManyTotpKeys(errStr)
     case SignalErrorCodeTooManyMfaKeys:
         throw SignalError.tooManyMfaKeys(errStr)
-    case SignalErrorCodeOneTimePasswordNotVerified:
-        throw SignalError.oneTimePasswordNotVerified(errStr)
+    case SignalErrorCodeMfaNotVerified:
+        throw SignalError.mfaNotVerified(errStr)
     case SignalErrorCodeMfaKeyNotFound:
         throw SignalError.mfaKeyNotFound(errStr)
+    case SignalErrorCodeWebAuthnRegistrationUnsuccessful:
+        throw SignalError.webAuthnRegistrationUnsuccessful(errStr)
+    case SignalErrorCodeProfileNotFound:
+        throw SignalError.profileNotFound(errStr)
+    case SignalErrorCodeReceiptAlreadyRedeemed:
+        throw SignalError.receiptAlreadyRedeemed(errStr)
     default:
         throw SignalError.unknown(errType, errStr)
     }

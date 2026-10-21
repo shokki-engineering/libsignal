@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+import type { Bytes } from '@signalapp/types';
+
 import * as Native from '../Native.js';
 import { LibSignalError } from '../Errors.js';
 import type { Environment, TokioAsyncContext } from '../net.js';
@@ -16,7 +18,7 @@ export type ChatRequest = Readonly<{
   verb: string;
   path: string;
   headers: ReadonlyArray<[string, string]>;
-  body?: Uint8Array<ArrayBuffer>;
+  body?: Bytes;
   timeoutMillis?: number;
 }>;
 
@@ -95,7 +97,7 @@ export interface ChatServiceListener extends ConnectionEventsListener {
    * queue and attempt to deliver it again in the future.
    */
   onIncomingMessage: (
-    envelope: Uint8Array<ArrayBuffer>,
+    envelope: Bytes,
     timestamp: number,
     ack: ChatServerMessageAck
   ) => void;
@@ -140,10 +142,7 @@ export interface ProvisioningConnectionListener
    *
    * Once the server receives the `ack` for this message, it will close this connection.
    */
-  onReceivedEnvelope: (
-    envelope: Uint8Array<ArrayBuffer>,
-    ack: ChatServerMessageAck
-  ) => void;
+  onReceivedEnvelope: (envelope: Bytes, ack: ChatServerMessageAck) => void;
 }
 
 /**
@@ -176,6 +175,11 @@ export type ChatConnection = {
 export interface ConnectionInfo {
   localPort: number;
   ipVersion: 'IPv4' | 'IPv6';
+  /**
+   * Whether the connection was made directly to the Signal service, rather than through a
+   * reflector or a user-configured proxy.
+   */
+  isDirect: boolean;
   toString: () => string;
 }
 
@@ -198,6 +202,10 @@ class ConnectionInfoImpl
       default:
         throw new TypeError(`ip type was unexpectedly ${value}`);
     }
+  }
+
+  public get isDirect(): boolean {
+    return Native.ChatConnectionInfo_is_direct(this);
   }
 
   public toString(): string {
@@ -509,10 +517,7 @@ export class ProvisioningConnection {
       receivedAddress(address: string, ack: Native.ServerMessageAck): void {
         listener.onReceivedAddress(address, new ChatServerMessageAck(ack));
       },
-      receivedEnvelope(
-        envelope: Uint8Array<ArrayBuffer>,
-        ack: Native.ServerMessageAck
-      ): void {
+      receivedEnvelope(envelope: Bytes, ack: Native.ServerMessageAck): void {
         listener.onReceivedEnvelope(envelope, new ChatServerMessageAck(ack));
       },
       connectionInterrupted(cause: Error | null): void {
@@ -569,7 +574,7 @@ class WeakListenerWrapper implements Native.ChatListener {
     this.listener.deref()?.connectionInterrupted(reason);
   }
   receivedIncomingMessage(
-    envelope: Uint8Array<ArrayBuffer>,
+    envelope: Bytes,
     timestamp: number,
     ack: Native.ServerMessageAck
   ): void {
@@ -595,10 +600,7 @@ class WeakProvisioningListenerWrapper implements Native.ProvisioningListener {
   receivedAddress(address: string, ack: Native.ServerMessageAck): void {
     this.listener.deref()?.receivedAddress(address, ack);
   }
-  receivedEnvelope(
-    envelope: Uint8Array<ArrayBuffer>,
-    ack: Native.ServerMessageAck
-  ): void {
+  receivedEnvelope(envelope: Bytes, ack: Native.ServerMessageAck): void {
     this.listener.deref()?.receivedEnvelope(envelope, ack);
   }
   connectionInterrupted(reason: Error | null): void {
@@ -613,7 +615,7 @@ function makeNativeChatListener(
   if ('onQueueEmpty' in listener) {
     return {
       receivedIncomingMessage(
-        envelope: Uint8Array<ArrayBuffer>,
+        envelope: Bytes,
         timestamp: number,
         ack: Native.ServerMessageAck
       ): void {
@@ -640,7 +642,7 @@ function makeNativeChatListener(
 
   return {
     receivedIncomingMessage(
-      _envelope: Uint8Array<ArrayBuffer>,
+      _envelope: Bytes,
       _timestamp: number,
       _ack: Native.ServerMessageAck
     ): void {

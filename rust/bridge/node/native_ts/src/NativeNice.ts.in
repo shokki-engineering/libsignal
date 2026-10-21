@@ -5,10 +5,13 @@
 
 // WARNING: this file was automatically generated
 
+import type { Bytes } from '@signalapp/types';
+
 import * as Native from './Native.js';
 import type {
   /* eslint-disable @typescript-eslint/no-unused-vars */
   GrpcTestCase,
+  StringMapFfiContents,
   {% for (ty, v) in ctx.derived_arg_converters|items -%}
     {{ ty|arg_ffi_type }},
   {%- endfor %}
@@ -18,7 +21,7 @@ import type {
   /* eslint-enable @typescript-eslint/no-unused-vars */
 } from './Native.js';
 
-import { ServiceId } from './Address.js';
+import { Aci, ServiceId, ServiceIdKind } from './Address.js';
 import * as zkgroup from './zkgroup/index.js';
 import * as uuid from './uuid.js';
 import ByteArray from './zkgroup/internal/ByteArray.js';
@@ -34,8 +37,11 @@ import {
   serviceIdArgConverter,
   grpcTestCaseConverter,
   liftNull,
+  stringMapArgConverter,
+  stringMapResultConverter,
 } from './NiceConverters.js';
 import { Rng } from './RngForTesting.js';
+import type { ChargeFailure } from './Errors.js';
 
 {% macro struct_type(struct) %}
     {%- if struct.is_tuple -%}
