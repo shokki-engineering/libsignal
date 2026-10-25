@@ -3275,7 +3275,7 @@ third-party/chromium/LICENSE.
 			<key>License</key>
 			<string>ISC License</string>
 			<key>Title</key>
-			<string>rustls-webpki 0.103.15</string>
+			<string>rustls-webpki 0.103.16</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -6566,7 +6566,7 @@ DEALINGS IN THE SOFTWARE.
 			<key>License</key>
 			<string>MIT License</string>
 			<key>Title</key>
-			<string>ctutils 0.4.2</string>
+			<string>ctutils 0.4.5</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>
@@ -7314,7 +7314,7 @@ SOFTWARE.
 			<key>License</key>
 			<string>MIT License</string>
 			<key>Title</key>
-			<string>tokio-stream 0.1.18, tokio-util 0.7.18, tokio 1.52.3</string>
+			<string>tokio-stream 0.1.18, tokio-util 0.7.18, tokio 1.54.1</string>
 			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 		</dict>

@@ -3152,7 +3152,7 @@ THIS SOFTWARE.
 
 ```
 
-## rustls-webpki 0.103.15
+## rustls-webpki 0.103.16
 
 ```
 Except as otherwise noted, this project is licensed under the following
@@ -6111,7 +6111,7 @@ THE SOFTWARE.
 
 ```
 
-## ctutils 0.4.2
+## ctutils 0.4.5
 
 ```
 Copyright (c) 2025-2026 The RustCrypto Project Developers
@@ -6767,7 +6767,7 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ```
 
-## tokio-stream 0.1.18, tokio-util 0.7.18, tokio 1.52.3
+## tokio-stream 0.1.18, tokio-util 0.7.18, tokio 1.54.1
 
 ```
 MIT License
